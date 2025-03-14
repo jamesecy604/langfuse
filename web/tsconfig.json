@@ -10,7 +10,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@langfuse/shared": ["../../packages/shared/src"],
+      "@langfuse/ee": ["../../ee/src"]
     },
     "strictNullChecks": true
   },
