@@ -1,0 +1,5 @@
+Invoke-WebRequest -Uri "https://gi8l7e3xy9.us-east-1.aws.clickhouse.cloud:8443/?query=SELECT%20name%20FROM%20system.tables%20WHERE%20database%20%3D%20'default'" -Headers @{"Authorization"="Basic $( [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('default:NjciLLlg_j0ro')) )"}
+
+
+node -e "const redis = require('redis'); const client = redis.createClient({url: 'rediss://clever-sole-51257.upstash.io:6379', password: 'Acg5
+AAIjcDE4N2MzMDAwOWJmMGY0YjAwOTMzYTE4Nzc1YjE3NDFjY3AxMA'}); client.on('error', (err) => console.log('Redis Client Error', err)); client.connect().then(() => console.log('Connected successfully')).catch(err => console.log('Connection failed', err))"

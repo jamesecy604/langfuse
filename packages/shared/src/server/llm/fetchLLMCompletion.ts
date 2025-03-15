@@ -103,6 +103,9 @@ export async function fetchLLMCompletion(
 
   if (traceParams) {
     const handler = new CallbackHandler({
+      publicKey: "pk-lf-e510259e-b4cc-4589-907a-24ddbb655a93",
+      secretKey: "sk-lf-bd202eec-b06c-4b41-8bf2-26a9014b79b2",
+      baseUrl: "http://localhost:3000",
       _projectId: traceParams.projectId,
       _isLocalEventExportEnabled: true,
       tags: traceParams.tags,

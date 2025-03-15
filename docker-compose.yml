@@ -104,8 +104,8 @@ services:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: miniosecret # CHANGEME
     ports:
-      - "9090:9000"
-    #   - "9091:9001"
+      - "9000:9000"
+      - "9001:9001"
     volumes:
       - langfuse_minio_data:/data
     healthcheck:

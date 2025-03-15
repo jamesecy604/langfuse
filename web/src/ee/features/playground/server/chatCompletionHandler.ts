@@ -1,5 +1,7 @@
 import { StreamingTextResponse } from "ai";
 import { NextResponse, type NextRequest } from "next/server";
+import { type Model } from "@langfuse/shared/src/db";
+import { type ChatMessage } from "@langfuse/shared";
 
 import {
   BaseError,
@@ -46,7 +48,11 @@ export default async function chatCompletionHandler(req: NextRequest) {
       );
     }
 
-    const { completion } = await fetchLLMCompletion({
+    const traceId = crypto.randomUUID();
+    const traceName = `Playground Chat Completion - ${modelParams.model}`;
+    const tags = ["playground", modelParams.provider, modelParams.model];
+
+    const { completion, processTracedEvents } = await fetchLLMCompletion({
       messages,
       modelParams,
       streaming: true,
@@ -55,8 +61,34 @@ export default async function chatCompletionHandler(req: NextRequest) {
       extraHeaders: decryptAndParseExtraHeaders(parsedKey.data.extraHeaders),
       baseURL: parsedKey.data.baseURL || undefined,
       config: parsedKey.data.config,
+      traceParams: {
+        traceId,
+        traceName,
+        projectId: body.projectId,
+        tags,
+        tokenCountDelegate: (response: unknown) => {
+          if (typeof response === "object" && response !== null) {
+            const res = response as { usage?: { total_tokens?: number } };
+            return res.usage?.total_tokens;
+          }
+          return undefined;
+        },
+        authCheck: {
+          validKey: true,
+          scope: {
+            projectId: body.projectId,
+            accessLevel: "all",
+            orgId: "playground", // Using playground as orgId for playground requests
+            plan: "cloud:hobby", // Default plan for playground
+            rateLimitOverrides: [],
+            apiKeyId: "playground", // Using playground as apiKeyId for playground requests
+          },
+        },
+      },
     });
 
+    // Process tracing events before returning response
+    await processTracedEvents();
     return new StreamingTextResponse(completion);
   } catch (err) {
     logger.error("Failed to handle chat completion", err);

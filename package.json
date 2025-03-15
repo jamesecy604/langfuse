@@ -91,6 +91,7 @@
     }
   },
   "dependencies": {
+    "langfuse": "^3.36.0",
     "redis": "^4.7.0"
   }
 }
