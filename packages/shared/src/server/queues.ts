@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import { z } from "zod";
-import { eventTypes } from ".";
+import { eventTypes } from "./ingestion/types";
 import {
   BatchActionQuerySchema,
   BatchActionType,

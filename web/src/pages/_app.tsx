@@ -103,8 +103,8 @@ const MyApp: AppType<{ session: Session | null }> = ({
           <PostHogProvider client={posthog}>
             <SessionProvider
               session={session}
-              refetchOnWindowFocus={true}
-              refetchInterval={5 * 60} // 5 minutes
+              refetchOnWindowFocus={false}
+              refetchInterval={30 * 60} // 30 minutes
               basePath={`${env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}
             >
               <DetailPageListsProvider>

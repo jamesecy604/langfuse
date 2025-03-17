@@ -1,32 +1,39 @@
 import { StreamingTextResponse } from "ai";
 import { NextResponse, type NextRequest } from "next/server";
-import { type Model } from "@langfuse/shared/src/db";
-import { type ChatMessage } from "@langfuse/shared";
+import { type Model } from "../../../../../../packages/shared/src/db";
+import { type ChatMessage } from "../../../../../../packages/shared";
 
 import {
   BaseError,
   InternalServerError,
   InvalidRequestError,
-} from "@langfuse/shared";
+} from "../../../../../../packages/shared";
 
 import { PosthogCallbackHandler } from "./analytics/posthogCallback";
 import { authorizeRequestOrThrow } from "./authorizeRequest";
 import { validateChatCompletionBody } from "./validateChatCompletionBody";
 
-import { prisma } from "@langfuse/shared/src/db";
-import { decrypt } from "@langfuse/shared/encryption";
+import { prisma } from "../../../../../../packages/shared/src/db";
+import { decrypt } from "../../../../../../packages/shared/src/encryption";
 import {
   LLMApiKeySchema,
   logger,
   fetchLLMCompletion,
   decryptAndParseExtraHeaders,
-} from "@langfuse/shared/src/server";
+} from "../../../../../../packages/shared/src/server";
+import { fetch } from "next/dist/compiled/@edge-runtime/primitives";
+//import { formatClickhouseUTCDateTime } from "../../../../../../packages/shared/src/server/utils/formatClickhouseUTCDateTime";
+import { v4 as uuidv4 } from "uuid";
+import { z } from "zod";
+import { jsonSchema } from "@langfuse/shared";
+import { instrumentSync, processEventBatch } from "@langfuse/shared/src/server";
+import { telemetry } from "@/src/features/telemetry";
 
 export default async function chatCompletionHandler(req: NextRequest) {
   try {
     const body = validateChatCompletionBody(await req.json());
-    const { userId } = await authorizeRequestOrThrow(body.projectId);
 
+    const { userId } = await authorizeRequestOrThrow(body.projectId);
     const { messages, modelParams } = body;
 
     const LLMApiKey = await prisma.llmApiKeys.findFirst({
@@ -48,9 +55,88 @@ export default async function chatCompletionHandler(req: NextRequest) {
       );
     }
 
-    const traceId = crypto.randomUUID();
-    const traceName = `Playground Chat Completion - ${modelParams.model}`;
+    const traceId = uuidv4();
+
+    const traceName = "internal Chat Completion from internal api";
+
     const tags = ["playground", modelParams.provider, modelParams.model];
+
+    const feed = {
+      projectId: body.projectId,
+      batch: [
+        {
+          type: "trace-create",
+          id: traceId,
+          name: traceName,
+          tags: tags,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            model: modelParams.model,
+            provider: modelParams.provider,
+            user_id: userId,
+          },
+          body: {
+            input: messages,
+            output: "",
+          },
+        },
+      ],
+    };
+
+    const authResult = await authorizeRequestOrThrow(body.projectId);
+    //console.log("feed:", JSON.stringify(feed, null, 2));
+    const traceEventSchema = z.object({
+      type: z.literal("trace-create"),
+      id: z.string(),
+      name: z.string(),
+      tags: z.array(z.string()),
+      timestamp: z.string(),
+      metadata: z.object({
+        model: z.string(),
+        provider: z.string(),
+        user_id: z.string(),
+      }),
+      body: z.object({
+        input: z.any(),
+        output: z.string(),
+      }),
+    });
+    //console.log("traceEventSchema:", { traceEventSchema });
+    const batchType = z.object({
+      batch: z.array(traceEventSchema),
+      metadata: jsonSchema.nullish(),
+    });
+    //console.log("batchtype:", { batchType });
+    const parsedSchema = instrumentSync(
+      { name: "ingestion-zod-parse-unknown-batch-event" },
+      () => batchType.safeParse(feed),
+    );
+
+    if (!parsedSchema.success) {
+      logger.info("Invalid request data", parsedSchema.error);
+      return NextResponse.json(
+        {
+          error: "Invalid request data",
+          message: parsedSchema.error.message,
+        },
+        { status: 400 },
+      );
+    }
+
+    await telemetry();
+    //console.log("parsedSchema:", { parsedSchema });
+    const result = await processEventBatch(parsedSchema.data.batch, {
+      ...authResult,
+      validKey: true,
+      scope: {
+        projectId: body.projectId,
+        accessLevel: "all",
+        orgId: "playground",
+        plan: "cloud:hobby",
+        rateLimitOverrides: [],
+        apiKeyId: "ingestion",
+      },
+    });
 
     const { completion, processTracedEvents } = await fetchLLMCompletion({
       messages,
@@ -86,6 +172,49 @@ export default async function chatCompletionHandler(req: NextRequest) {
         },
       },
     });
+
+    // Create observation via internal ingestion
+    // await fetch(`http://localhost:3000/api/public/internalIngestion`, {
+    //   method: "POST",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //   },
+    //   body: JSON.stringify({
+    //     projectId: body.projectId,
+    //     batch: [
+    //       {
+    //         type: "observation",
+    //         id: traceId,
+    //         trace_id: traceId,
+    //         project_id: body.projectId,
+    //         start_time: formatClickhouseUTCDateTime(new Date()),
+    //         name: `NEW test Chat Completion - ${modelParams.model}`,
+    //         input: JSON.stringify(messages),
+    //         output: "test output---NEW",
+    //         metadata: {
+    //           model: modelParams.model,
+    //           provider: modelParams.provider,
+    //           user_id: userId,
+    //           tags: [
+    //             "playground",
+    //             modelParams.provider,
+    //             modelParams.model,
+    //           ].join(","),
+    //         },
+    //         usage_details: {
+    //           input_tokens: 10,
+    //           output_tokens: 5,
+    //           total_tokens: 15,
+    //         },
+    //         cost_details: {
+    //           input_cost: 0.02,
+    //           output_cost: 0.01,
+    //           total_cost: 0.03,
+    //         },
+    //       },
+    //     ],
+    //   }),
+    // });
 
     // Process tracing events before returning response
     await processTracedEvents();
