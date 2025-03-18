@@ -1,9 +1,5 @@
 import type { ZodSchema } from "zod";
 
-import { ChatAnthropic } from "@langchain/anthropic";
-import { ChatVertexAI } from "@langchain/google-vertexai";
-import { ChatBedrockConverse } from "@langchain/aws";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import {
   AIMessage,
   BaseMessage,
@@ -16,10 +12,6 @@ import {
 } from "@langchain/core/output_parsers";
 import { IterableReadableStream } from "@langchain/core/utils/stream";
 import { ChatOpenAI } from "@langchain/openai";
-import GCPServiceAccountKeySchema, {
-  BedrockConfigSchema,
-  BedrockCredentialSchema,
-} from "../../interfaces/customLLMProviderConfigSchemas";
 import { processEventBatch } from "../ingestion/processEventBatch";
 import { logger } from "../logger";
 import {
@@ -117,10 +109,72 @@ export async function fetchLLMCompletion(
         const events = await handler.langfuse._exportLocalEvents(
           traceParams.projectId,
         );
+        const generationCreateEvent = events.find(
+          (event) => event.type === "generation-create",
+        );
+        if (generationCreateEvent) {
+          const response = await chatModel.invoke(finalMessages, runConfig);
+          const generation = {
+            text: response.content || "",
+            generationInfo: response.response_metadata,
+          };
+
+          const usage = {
+            input: generation.generationInfo?.usage?.prompt_tokens || 0,
+            output: generation.generationInfo?.usage?.completion_tokens || 0,
+            total: generation.generationInfo?.usage?.total_tokens || 0,
+            inputCost:
+              ((generation.generationInfo?.usage?.prompt_tokens || 0) *
+                0.0015) /
+              1000,
+            outputCost:
+              ((generation.generationInfo?.usage?.completion_tokens || 0) *
+                0.002) /
+              1000,
+            totalCost:
+              ((generation.generationInfo?.usage?.total_tokens || 0) * 0.0015) /
+              1000,
+          };
+
+          // Ensure cost data is properly included in the event
+          const eventBody = {
+            ...generationCreateEvent.body,
+            usage: usage,
+            costDetails: {
+              inputTokens: usage.input,
+              outputTokens: usage.output,
+              inputCost: usage.inputCost,
+              outputCost: usage.outputCost,
+            },
+            total_cost: usage.totalCost,
+            output: response.content || "",
+            metadata: {
+              ...(generationCreateEvent.body.metadata || {}),
+              cost: usage.totalCost,
+            },
+          };
+
+          // Replace the body with our complete version
+          generationCreateEvent.body = eventBody;
+
+          console.log(
+            "Generation metadata with usage:",
+            generationCreateEvent.body.metadata,
+          );
+          console.log("Generation usage:", generationCreateEvent.body.usage);
+        }
+        console.log("modified events", JSON.parse(JSON.stringify(events)));
+        // let new_events = [];
+        // new_events.push(testevent);
+        //console.log("modified events", JSON.parse(JSON.stringify(new_events)));
         await processEventBatch(
           JSON.parse(JSON.stringify(events)), // stringify to emulate network event batch from network call
           traceParams.authCheck,
         );
+        // await processEventBatch(
+        //   JSON.parse(JSON.stringify(new_events)), // stringify to emulate network event batch from network call
+        //   traceParams.authCheck,
+        // );
       } catch (e) {
         logger.error("Failed to process traced events", { error: e });
       }
@@ -149,24 +203,9 @@ export async function fetchLLMCompletion(
 
   finalMessages = finalMessages.filter((m) => m.content.length > 0);
 
-  let chatModel:
-    | ChatOpenAI
-    | ChatAnthropic
-    | ChatBedrockConverse
-    | ChatVertexAI
-    | ChatGoogleGenerativeAI;
-  if (modelParams.adapter === LLMAdapter.Anthropic) {
-    chatModel = new ChatAnthropic({
-      anthropicApiKey: apiKey,
-      anthropicApiUrl: baseURL,
-      modelName: modelParams.model,
-      temperature: modelParams.temperature,
-      maxTokens: modelParams.max_tokens,
-      topP: modelParams.top_p,
-      callbacks: finalCallbacks,
-      clientOptions: { maxRetries, timeout: 1000 * 60 * 2 }, // 2 minutes timeout
-    });
-  } else if (modelParams.adapter === LLMAdapter.OpenAI) {
+  let chatModel: ChatOpenAI;
+
+  if (modelParams.adapter === LLMAdapter.OpenAI) {
     chatModel = new ChatOpenAI({
       openAIApiKey: apiKey,
       modelName: modelParams.model,
@@ -174,7 +213,6 @@ export async function fetchLLMCompletion(
       maxTokens: modelParams.max_tokens,
       topP: modelParams.top_p,
       streamUsage: false, // https://github.com/langchain-ai/langchainjs/issues/6533
-      callbacks: finalCallbacks,
       maxRetries,
       configuration: {
         baseURL,
@@ -182,67 +220,8 @@ export async function fetchLLMCompletion(
       },
       timeout: 1000 * 60 * 2, // 2 minutes timeout
     });
-  } else if (modelParams.adapter === LLMAdapter.Azure) {
-    chatModel = new ChatOpenAI({
-      azureOpenAIApiKey: apiKey,
-      azureOpenAIBasePath: baseURL,
-      azureOpenAIApiDeploymentName: modelParams.model,
-      azureOpenAIApiVersion: "2024-02-01",
-      temperature: modelParams.temperature,
-      maxTokens: modelParams.max_tokens,
-      topP: modelParams.top_p,
-      callbacks: finalCallbacks,
-      maxRetries,
-      timeout: 1000 * 60 * 2, // 2 minutes timeout
-      configuration: {
-        defaultHeaders: extraHeaders,
-      },
-    });
-  } else if (modelParams.adapter === LLMAdapter.Bedrock) {
-    const { region } = BedrockConfigSchema.parse(config);
-    const credentials = BedrockCredentialSchema.parse(JSON.parse(apiKey));
-
-    chatModel = new ChatBedrockConverse({
-      model: modelParams.model,
-      region,
-      credentials,
-      temperature: modelParams.temperature,
-      maxTokens: modelParams.max_tokens,
-      topP: modelParams.top_p,
-      callbacks: finalCallbacks,
-      maxRetries,
-      timeout: 1000 * 60 * 2, // 2 minutes timeout
-    });
-  } else if (modelParams.adapter === LLMAdapter.VertexAI) {
-    const credentials = GCPServiceAccountKeySchema.parse(JSON.parse(apiKey));
-
-    // Requests time out after 60 seconds for both public and private endpoints by default
-    // Reference: https://cloud.google.com/vertex-ai/docs/predictions/get-online-predictions#send-request
-    chatModel = new ChatVertexAI({
-      modelName: modelParams.model,
-      temperature: modelParams.temperature,
-      maxOutputTokens: modelParams.max_tokens,
-      topP: modelParams.top_p,
-      callbacks: finalCallbacks,
-      maxRetries,
-      authOptions: {
-        projectId: credentials.project_id,
-        credentials,
-      },
-    });
-  } else if (modelParams.adapter === LLMAdapter.GoogleAIStudio) {
-    chatModel = new ChatGoogleGenerativeAI({
-      model: modelParams.model,
-      temperature: modelParams.temperature,
-      maxOutputTokens: modelParams.max_tokens,
-      topP: modelParams.top_p,
-      callbacks: finalCallbacks,
-      maxRetries,
-      apiKey,
-    });
   } else {
     // eslint-disable-next-line no-unused-vars
-    const _exhaustiveCheck: never = modelParams.adapter;
     throw new Error("This model provider is not supported.");
   }
 
@@ -258,51 +237,6 @@ export async function fetchLLMCompletion(
         completion: await (chatModel as ChatOpenAI) // Typecast necessary due to https://github.com/langchain-ai/langchainjs/issues/6795
           .withStructuredOutput(params.structuredOutputSchema)
           .invoke(finalMessages, runConfig),
-        processTracedEvents,
-      };
-    }
-
-    /*
-  Workaround OpenAI reasoning models:
-  
-  This is a temporary workaround to avoid sending unsupported parameters to OpenAI's O1 models.
-  O1 models do not support:
-  - system messages
-  - top_p
-  - max_tokens at all, one has to use max_completion_tokens instead
-  - temperature different than 1
-
-  Reference: https://platform.openai.com/docs/guides/reasoning/beta-limitations
-  */
-    if (
-      modelParams.model.startsWith("o1-") ||
-      modelParams.model.startsWith("o3-")
-    ) {
-      const filteredMessages = finalMessages.filter((message) => {
-        return (
-          modelParams.model.startsWith("o3-") || message._getType() !== "system"
-        );
-      });
-
-      return {
-        completion: await new ChatOpenAI({
-          openAIApiKey: apiKey,
-          modelName: modelParams.model,
-          temperature: 1,
-          maxTokens: undefined,
-          topP: undefined,
-          callbacks,
-          maxRetries,
-          modelKwargs: {
-            max_completion_tokens: modelParams.max_tokens,
-          },
-          configuration: {
-            baseURL,
-          },
-          timeout: 1000 * 60 * 2, // 2 minutes timeout
-        })
-          .pipe(new StringOutputParser())
-          .invoke(filteredMessages, runConfig),
         processTracedEvents,
       };
     }

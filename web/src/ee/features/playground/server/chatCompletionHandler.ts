@@ -57,86 +57,9 @@ export default async function chatCompletionHandler(req: NextRequest) {
 
     const traceId = uuidv4();
 
-    const traceName = "internal Chat Completion from internal api";
+    const traceName = "replace _localExportEvents";
 
     const tags = ["playground", modelParams.provider, modelParams.model];
-
-    const feed = {
-      projectId: body.projectId,
-      batch: [
-        {
-          type: "trace-create",
-          id: traceId,
-          name: traceName,
-          tags: tags,
-          timestamp: new Date().toISOString(),
-          metadata: {
-            model: modelParams.model,
-            provider: modelParams.provider,
-            user_id: userId,
-          },
-          body: {
-            input: messages,
-            output: "",
-          },
-        },
-      ],
-    };
-
-    const authResult = await authorizeRequestOrThrow(body.projectId);
-    //console.log("feed:", JSON.stringify(feed, null, 2));
-    const traceEventSchema = z.object({
-      type: z.literal("trace-create"),
-      id: z.string(),
-      name: z.string(),
-      tags: z.array(z.string()),
-      timestamp: z.string(),
-      metadata: z.object({
-        model: z.string(),
-        provider: z.string(),
-        user_id: z.string(),
-      }),
-      body: z.object({
-        input: z.any(),
-        output: z.string(),
-      }),
-    });
-    //console.log("traceEventSchema:", { traceEventSchema });
-    const batchType = z.object({
-      batch: z.array(traceEventSchema),
-      metadata: jsonSchema.nullish(),
-    });
-    //console.log("batchtype:", { batchType });
-    const parsedSchema = instrumentSync(
-      { name: "ingestion-zod-parse-unknown-batch-event" },
-      () => batchType.safeParse(feed),
-    );
-
-    if (!parsedSchema.success) {
-      logger.info("Invalid request data", parsedSchema.error);
-      return NextResponse.json(
-        {
-          error: "Invalid request data",
-          message: parsedSchema.error.message,
-        },
-        { status: 400 },
-      );
-    }
-
-    await telemetry();
-    //console.log("parsedSchema:", { parsedSchema });
-    const result = await processEventBatch(parsedSchema.data.batch, {
-      ...authResult,
-      validKey: true,
-      scope: {
-        projectId: body.projectId,
-        accessLevel: "all",
-        orgId: "playground",
-        plan: "cloud:hobby",
-        rateLimitOverrides: [],
-        apiKeyId: "ingestion",
-      },
-    });
 
     const { completion, processTracedEvents } = await fetchLLMCompletion({
       messages,
@@ -149,7 +72,7 @@ export default async function chatCompletionHandler(req: NextRequest) {
       config: parsedKey.data.config,
       traceParams: {
         traceId,
-        traceName,
+        traceName: traceName,
         projectId: body.projectId,
         tags,
         tokenCountDelegate: (response: unknown) => {
@@ -172,49 +95,6 @@ export default async function chatCompletionHandler(req: NextRequest) {
         },
       },
     });
-
-    // Create observation via internal ingestion
-    // await fetch(`http://localhost:3000/api/public/internalIngestion`, {
-    //   method: "POST",
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //   },
-    //   body: JSON.stringify({
-    //     projectId: body.projectId,
-    //     batch: [
-    //       {
-    //         type: "observation",
-    //         id: traceId,
-    //         trace_id: traceId,
-    //         project_id: body.projectId,
-    //         start_time: formatClickhouseUTCDateTime(new Date()),
-    //         name: `NEW test Chat Completion - ${modelParams.model}`,
-    //         input: JSON.stringify(messages),
-    //         output: "test output---NEW",
-    //         metadata: {
-    //           model: modelParams.model,
-    //           provider: modelParams.provider,
-    //           user_id: userId,
-    //           tags: [
-    //             "playground",
-    //             modelParams.provider,
-    //             modelParams.model,
-    //           ].join(","),
-    //         },
-    //         usage_details: {
-    //           input_tokens: 10,
-    //           output_tokens: 5,
-    //           total_tokens: 15,
-    //         },
-    //         cost_details: {
-    //           input_cost: 0.02,
-    //           output_cost: 0.01,
-    //           total_cost: 0.03,
-    //         },
-    //       },
-    //     ],
-    //   }),
-    // });
 
     // Process tracing events before returning response
     await processTracedEvents();
