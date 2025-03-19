@@ -84,12 +84,17 @@ export class RateLimitService {
       return;
     }
 
-    // Connect Redis if not initialized
-    if (RateLimitService?.redis?.status !== "ready") {
+    // Ensure Redis is ready
+    if (!RateLimitService.redis || RateLimitService.redis.status !== "ready") {
       try {
-        await RateLimitService?.redis?.connect();
+        await RateLimitService.redis?.connect();
+        // Wait for connection to be ready
+        await new Promise((resolve) => {
+          RateLimitService.redis?.once("ready", resolve);
+        });
       } catch (err) {
-        // Do nothing here. We will fail open if Redis is not available.
+        logger.warn("Redis connection failed, skipping rate limiting");
+        return undefined;
       }
     }
 
@@ -100,7 +105,7 @@ export class RateLimitService {
 
       keyPrefix: this.rateLimitPrefix(resource), // must be unique for limiters with different purpose
       storeClient: RateLimitService.redis,
-      rejectIfRedisNotReady: true,
+      rejectIfRedisNotReady: false, // Fail open instead of throwing errors
     });
 
     let res: RateLimitResult | undefined = undefined;

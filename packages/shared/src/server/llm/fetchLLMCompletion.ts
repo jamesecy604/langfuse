@@ -148,22 +148,12 @@ export async function fetchLLMCompletion(
             },
             total_cost: usage.totalCost,
             output: response.content || "",
-            metadata: {
-              ...(generationCreateEvent.body.metadata || {}),
-              cost: usage.totalCost,
-            },
           };
 
           // Replace the body with our complete version
           generationCreateEvent.body = eventBody;
-
-          console.log(
-            "Generation metadata with usage:",
-            generationCreateEvent.body.metadata,
-          );
-          console.log("Generation usage:", generationCreateEvent.body.usage);
         }
-        console.log("modified events", JSON.parse(JSON.stringify(events)));
+
         // let new_events = [];
         // new_events.push(testevent);
         //console.log("modified events", JSON.parse(JSON.stringify(new_events)));

@@ -14,7 +14,7 @@ generator client {
 // }
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://postgres:C@caoyun1234@db.obyeglqjlwxilaylsraf.supabase.co:5432/postgres"
+  url      = "postgresql://postgres:C@caoyun1234@db.obyeglqjlwxilaylsraf.supabase.co:5432/postgres?connection_timeout=20000"
 }
 
 generator erd {
