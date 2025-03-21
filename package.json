@@ -93,6 +93,8 @@
   "dependencies": {
     "langfuse": "^3.36.0",
     "langfuse-langchain": "^3.36.0",
-    "redis": "^4.7.0"
+    "redis": "^4.7.0",
+    "sonner": "^1.4.41",
+    "zod": "^3.23.8"
   }
 }

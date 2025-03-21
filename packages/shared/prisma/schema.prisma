@@ -25,16 +25,16 @@ generator erd {
   output       = "database.svg"
 }
 
-generator kysely {
-  provider = "prisma-kysely"
+// generator kysely {
+//   provider = "prisma-kysely"
 
-  // Optionally provide a destination directory for the generated file
-  // and a filename of your choice
-  // output = "../src/db"
-  // fileName = "types.ts"
-  // Optionally generate runtime enums to a separate file
-  // enumFileName = "enums.ts"
-}
+//   // Optionally provide a destination directory for the generated file
+//   // and a filename of your choice
+//   // output = "../src/db"
+//   // fileName = "types.ts"
+//   // Optionally generate runtime enums to a separate file
+//   // enumFileName = "enums.ts"
+// }
 
 // Necessary for Next auth
 model Account {
@@ -86,9 +86,32 @@ model User {
   featureFlags            String[]                 @default([]) @map("feature_flags")
   annotatedLockedItem     AnnotationQueueItem[]    @relation("LockedByUser")
   annotatedCompletedItem  AnnotationQueueItem[]    @relation("AnnotatorUser")
-  UserApiKeys             UserApiKeys[]
+  UserApiKeys             UserApiKey[]
 
   @@map("users")
+}
+
+model UserApiKey {
+  id           String    @id @default(uuid())
+  name         String
+  description  String?
+  userId       String
+  createdById  String
+  hashedKey    String    @unique
+  encryptedKey String?
+  scopes       String[]
+  allowedIps   String[]
+  revoked      Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now())
+  expiresAt    DateTime?
+  lastUsedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdById])
+  @@map("UserApiKey")
 }
 
 model VerificationToken {
@@ -956,23 +979,6 @@ model ObservationMedia {
   @@unique([projectId, traceId, observationId, mediaId, field])
   @@index([projectId, observationId])
   @@map("observation_media")
-}
-
-model UserApiKeys {
-  id           String    @id @default(cuid())
-  userId       String    @map("user_id")
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name         String?
-  hashedKey    String    @map("hashed_key")
-  encryptedKey String?   @map("encrypted_key")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  expiryDate   DateTime? @map("expiry_date")
-  deletedAt    DateTime? @map("deleted_at")
-  isDeleted    Boolean   @default(false) @map("is_deleted")
-
-  @@index([userId])
-  @@index([hashedKey])
-  @@map("user_api_keys")
 }
 
 model QueueBackUp {

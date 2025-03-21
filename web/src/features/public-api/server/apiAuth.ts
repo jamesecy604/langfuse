@@ -9,7 +9,9 @@ import {
   OrgEnrichedApiKey,
   logger,
   instrumentAsync,
+  verifyJwt,
 } from "@langfuse/shared/src/server";
+import { type JwtPayload } from "jsonwebtoken";
 import {
   type PrismaClient,
   type ApiKey,
@@ -101,6 +103,7 @@ export class ApiAuthService {
 
   async verifyAuthHeaderAndReturnScope(
     authHeader: string | undefined,
+    headers: Record<string, string | undefined> = {},
   ): Promise<AuthHeaderVerificationResult> {
     return instrumentAsync({ name: "api-auth-verify" }, async () => {
       if (!authHeader) {
@@ -108,6 +111,66 @@ export class ApiAuthService {
         return {
           validKey: false,
           error: "No authorization header",
+        };
+      }
+
+      // JWT auth for internal routes
+      if (
+        headers["from_internal"] === "true" &&
+        authHeader.startsWith("Bearer ")
+      ) {
+        const token = authHeader.replace("Bearer ", "");
+        const payload = verifyJwt(token) as JwtPayload;
+
+        if (!payload.userId) {
+          return {
+            validKey: false,
+            error: "Invalid JWT payload",
+          };
+        }
+
+        const user = await this.prisma.user.findUnique({
+          where: { id: payload.userId },
+          include: {
+            projects: {
+              include: {
+                organization: true,
+              },
+            },
+          },
+        });
+
+        if (!user) {
+          return {
+            validKey: false,
+            error: "User not found",
+          };
+        }
+
+        // Use first project for now - can be expanded to handle multiple projects
+        const project = user.projects[0];
+        if (!project) {
+          return {
+            validKey: false,
+            error: "User has no projects",
+          };
+        }
+
+        addUserToSpan({ projectId: project.id });
+
+        return {
+          validKey: true,
+          scope: {
+            projectId: project.id,
+            accessLevel: "all",
+            orgId: project.organization.id,
+            plan: getOrganizationPlanServerSide(
+              project.organization.cloudConfig,
+            ),
+            rateLimitOverrides:
+              project.organization.cloudConfig?.rateLimitOverrides ?? [],
+            apiKeyId: null, // No API key for internal auth
+          },
         };
       }
 
@@ -197,11 +260,67 @@ export class ApiAuthService {
             },
           };
         }
-        // Bearer auth, limited scope, only needs public key
+        // Bearer auth - handles both internal JWT and public key auth
         if (authHeader.startsWith("Bearer ")) {
-          const publicKey = authHeader.replace("Bearer ", "");
+          const token = authHeader.replace("Bearer ", "");
 
-          const dbKey = await this.findDbKeyOrThrow(publicKey);
+          // Internal JWT auth
+          if (headers["from_internal"] === "true") {
+            const payload = verifyJwt(token) as JwtPayload;
+
+            if (!payload.userId) {
+              return {
+                validKey: false,
+                error: "Invalid JWT payload",
+              };
+            }
+
+            const user = await this.prisma.user.findUnique({
+              where: { id: payload.userId },
+              include: {
+                projects: {
+                  include: {
+                    organization: true,
+                  },
+                },
+              },
+            });
+
+            if (!user) {
+              return {
+                validKey: false,
+                error: "User not found",
+              };
+            }
+
+            const project = user.projects[0];
+            if (!project) {
+              return {
+                validKey: false,
+                error: "User has no projects",
+              };
+            }
+
+            addUserToSpan({ projectId: project.id });
+
+            return {
+              validKey: true,
+              scope: {
+                projectId: project.id,
+                accessLevel: "all",
+                orgId: project.organization.id,
+                plan: getOrganizationPlanServerSide(
+                  project.organization.cloudConfig,
+                ),
+                rateLimitOverrides:
+                  project.organization.cloudConfig?.rateLimitOverrides ?? [],
+                apiKeyId: null,
+              },
+            };
+          }
+
+          // Public key auth
+          const dbKey = await this.findDbKeyOrThrow(token);
 
           addUserToSpan({ projectId: dbKey.projectId });
 

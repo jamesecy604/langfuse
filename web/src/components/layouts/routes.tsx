@@ -164,6 +164,19 @@ export const ROUTES: Route[] = [
     bottom: true,
   },
   {
+    title: "User API Keys",
+    pathname: "/api-keys",
+    icon: FileJson,
+    bottom: true,
+  },
+  {
+    title: "User API Keys",
+    pathname: "/api-keys",
+    icon: FileJson,
+    bottom: true,
+    show: ({ organization }) => organization === undefined,
+  },
+  {
     title: "Support",
     icon: LifeBuoy,
     bottom: true,
