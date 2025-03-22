@@ -76,7 +76,12 @@ export function CreateApiKeyButton(props: { projectId: string }) {
             <div className="mt-4 max-w-full">
               <div className="text-md my-2 font-semibold">Usage</div>
               <QuickstartExamples
-                secretKey={generatedKeys.secretKey}
+                secretKey={
+                  "sk-" +
+                  generatedKeys.publicKey +
+                  "-" +
+                  generatedKeys.secretKey
+                }
                 publicKey={generatedKeys.publicKey}
               />
             </div>
@@ -101,7 +106,16 @@ export const ApiKeyRender = ({
           This key can only be viewed once. You can always create new keys in
           the project settings.
         </div>
-        <CodeView content={generatedKeys?.secretKey ?? "Loading ..."} />
+        <CodeView
+          content={
+            generatedKeys?.secretKey
+              ? "sk-" +
+                generatedKeys?.publicKey +
+                "-" +
+                generatedKeys?.secretKey
+              : "Loading ..."
+          }
+        />
       </div>
       <div className="mb-4">
         <div className="text-md mb-2 font-semibold">Public Key</div>

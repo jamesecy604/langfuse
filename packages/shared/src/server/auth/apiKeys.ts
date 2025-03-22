@@ -15,9 +15,11 @@ export async function hashSecretKey(key: string) {
 }
 
 async function generateKeySet() {
+  const publicKey = `${randomUUID().replaceAll("-", "")}`;
+  const secretKey = `${randomUUID().replaceAll("-", "")}`;
   return {
-    pk: `pk-lf-${randomUUID()}`,
-    sk: `sk-lf-${randomUUID()}`,
+    pk: publicKey,
+    sk: secretKey,
   };
 }
 

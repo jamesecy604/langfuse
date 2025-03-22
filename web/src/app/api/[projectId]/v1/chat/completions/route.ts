@@ -1,23 +1,82 @@
-import { NextRequest, NextResponse } from "next/server";
 import { OpenAI } from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { Langfuse } from "langfuse";
+import { prisma } from "../../../../../../../../packages/shared/src/db";
+import { NextResponse } from "next/server";
+import {
+  createShaHash,
+  verifySecretKey,
+} from "../../../../../../../../packages/shared/src/server/auth/apiKeys";
 
-// Initialize Langfuse
-const langfuse = new Langfuse({
-  publicKey: "pk-lf-e510259e-b4cc-4589-907a-24ddbb655a93",
-  secretKey: "sk-lf-bd202eec-b06c-4b41-8bf2-26a9014b79b2",
-  baseUrl: "http://localhost:3000",
-  _projectId: "cm88onipo000euvlssrisywh9",
-});
+export async function POST(
+  request: Request,
+  { params }: { params: { projectId: string } },
+) {
+  if (!process.env.SALT) {
+    return NextResponse.json(
+      { error: "Server configuration error" },
+      { status: 500 },
+    );
+  }
 
-export async function POST(req: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return NextResponse.json({ error: "No bearer in header" }, { status: 401 });
+  }
+
+  const apiKeyValue = authHeader.substring(7);
+
+  const keyParts = apiKeyValue.split("-");
+  if (keyParts.length !== 3) {
+    return NextResponse.json(
+      {
+        error:
+          "Invalid API key format - must be in format sk-<publicKey>-<secretKey>",
+      },
+      { status: 401 },
+    );
+  }
+
+  const publicKey = keyParts[1];
+  const secretKey = keyParts[2];
+
+  // Find key by public key
+
+  const apiKeyRecord = await prisma.apiKey.findUnique({
+    where: { publicKey },
+    include: { project: true },
+  });
+
+  if (!apiKeyRecord) {
+    return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+  }
+  console.log("SecretKey", secretKey);
+  // Hash the provided secret key using Langfuse's standard method
+  const hashedSecretKey = createShaHash(secretKey, process.env.SALT);
+  console.log("hashedSecretKey", hashedSecretKey);
+  console.log(
+    "apiKeyRecord.fastHashedSecretKey",
+    apiKeyRecord.fastHashedSecretKey,
+  );
+  // Compare with stored fast hashed secret key
+  if (hashedSecretKey !== apiKeyRecord.fastHashedSecretKey) {
+    return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+  }
+
+  // Initialize Langfuse with projectId from path parameter
+  const langfuse = new Langfuse({
+    publicKey: "9b3cf6b62ac64a3ab1f9332623b841a1",
+    secretKey: "27b0bb1282434147909f74b395b99228",
+    baseUrl: "http://localhost:3000",
+    _projectId: params.projectId,
+  });
+
   // Declare trace and requestSpan at function scope
   const trace = langfuse.trace({
     name: "chat-completion",
     metadata: {
-      method: req.method,
-      url: req.url,
+      method: request.method,
+      url: request.url,
     },
   });
 
@@ -34,19 +93,21 @@ export async function POST(req: NextRequest) {
     headers.set("Access-Control-Allow-Headers", "Content-Type");
 
     // Handle OPTIONS request for CORS preflight
-    if (req.method === "OPTIONS") {
-      return new Response(null, { headers });
+    if (request.method === "OPTIONS") {
+      return NextResponse.json(null, {
+        headers: Object.fromEntries(headers),
+        status: 200,
+      });
     }
 
-    const body = await req.json();
+    const body = await request.json();
     trace.update({
       input: body,
     });
-
     if (!body || !body.model || !body.messages) {
       return NextResponse.json(
         { error: "Invalid request payload" },
-        { status: 400, headers },
+        { status: 400 },
       );
     }
 
@@ -149,7 +210,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return new Response(readableStream, {
+      return new NextResponse(readableStream, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
@@ -209,7 +270,7 @@ export async function POST(req: NextRequest) {
             error: "Invalid response from AI provider",
             details: "No assistant message content received",
           },
-          { status: 500, headers },
+          { status: 500 },
         );
       }
 
@@ -225,7 +286,7 @@ export async function POST(req: NextRequest) {
             },
           })),
         },
-        { headers },
+        { status: 200 },
       );
     }
   } catch (error) {

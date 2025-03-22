@@ -9,9 +9,7 @@ import {
   OrgEnrichedApiKey,
   logger,
   instrumentAsync,
-  verifyJwt,
 } from "@langfuse/shared/src/server";
-import { type JwtPayload } from "jsonwebtoken";
 import {
   type PrismaClient,
   type ApiKey,
@@ -103,7 +101,6 @@ export class ApiAuthService {
 
   async verifyAuthHeaderAndReturnScope(
     authHeader: string | undefined,
-    headers: Record<string, string | undefined> = {},
   ): Promise<AuthHeaderVerificationResult> {
     return instrumentAsync({ name: "api-auth-verify" }, async () => {
       if (!authHeader) {
@@ -114,213 +111,190 @@ export class ApiAuthService {
         };
       }
 
-      // JWT auth for internal routes
-      if (
-        headers["from_internal"] === "true" &&
-        authHeader.startsWith("Bearer ")
-      ) {
-        const token = authHeader.replace("Bearer ", "");
-        const payload = verifyJwt(token) as JwtPayload;
-
-        if (!payload.userId) {
-          return {
-            validKey: false,
-            error: "Invalid JWT payload",
-          };
-        }
-
-        const user = await this.prisma.user.findUnique({
-          where: { id: payload.userId },
-          include: {
-            projects: {
-              include: {
-                organization: true,
-              },
-            },
-          },
-        });
-
-        if (!user) {
-          return {
-            validKey: false,
-            error: "User not found",
-          };
-        }
-
-        // Use first project for now - can be expanded to handle multiple projects
-        const project = user.projects[0];
-        if (!project) {
-          return {
-            validKey: false,
-            error: "User has no projects",
-          };
-        }
-
-        addUserToSpan({ projectId: project.id });
-
-        return {
-          validKey: true,
-          scope: {
-            projectId: project.id,
-            accessLevel: "all",
-            orgId: project.organization.id,
-            plan: getOrganizationPlanServerSide(
-              project.organization.cloudConfig,
-            ),
-            rateLimitOverrides:
-              project.organization.cloudConfig?.rateLimitOverrides ?? [],
-            apiKeyId: null, // No API key for internal auth
-          },
-        };
-      }
-
       try {
         // Basic auth, full scope, needs secret key and public key
         if (authHeader.startsWith("Basic ")) {
-          const { username: publicKey, password: secretKey } =
+          const { username: reqPublicKey, password: reqSecretKey } =
             this.extractBasicAuthCredentials(authHeader);
+          let publicKey = reqPublicKey;
+          let secretKey = reqSecretKey;
 
-          const salt = env.SALT;
-          const hashFromProvidedKey = createShaHash(secretKey, salt);
+          if (publicKey) {
+            const salt = env.SALT;
+            const hashFromProvidedKey = createShaHash(secretKey, salt);
 
-          // fetches by redis if available, fallback to postgres
-          // api key from redis does
-          const apiKey =
-            await this.fetchApiKeyAndAddToRedis(hashFromProvidedKey);
+            // fetches by redis if available, fallback to postgres
+            // api key from redis does
+            const apiKey =
+              await this.fetchApiKeyAndAddToRedis(hashFromProvidedKey);
 
-          let finalApiKey = apiKey;
+            let finalApiKey = apiKey;
 
-          if (!apiKey || !apiKey.fastHashedSecretKey) {
-            const slowKey = await this.prisma.apiKey.findUnique({
-              where: { publicKey },
-              include: { project: { include: { organization: true } } },
-            });
+            if (!apiKey || !apiKey.fastHashedSecretKey) {
+              const slowKey = await this.prisma.apiKey.findUnique({
+                where: { publicKey },
+                include: { project: { include: { organization: true } } },
+              });
 
-            if (!slowKey) {
-              logger.error("No key found for public key", publicKey);
-              if (this.redis) {
-                logger.info(
-                  `No key found, storing ${API_KEY_NON_EXISTENT} in redis`,
-                );
-                await this.addApiKeyToRedis(
-                  hashFromProvidedKey,
-                  API_KEY_NON_EXISTENT,
-                );
+              if (!slowKey) {
+                logger.error("No key found for public key", publicKey);
+                if (this.redis) {
+                  logger.info(
+                    `No key found, storing ${API_KEY_NON_EXISTENT} in redis`,
+                  );
+                  await this.addApiKeyToRedis(
+                    hashFromProvidedKey,
+                    API_KEY_NON_EXISTENT,
+                  );
+                }
+                throw new Error("Invalid credentials");
               }
-              throw new Error("Invalid credentials");
-            }
 
-            const isValid = await verifySecretKey(
-              secretKey,
-              slowKey.hashedSecretKey,
-            );
+              const isValid = await verifySecretKey(
+                secretKey,
+                slowKey.hashedSecretKey,
+              );
 
-            if (!isValid) {
-              logger.debug(`Old key is invalid: ${publicKey}`);
-              throw new Error("Invalid credentials");
-            }
+              if (!isValid) {
+                logger.debug(`Old key is invalid: ${publicKey}`);
+                throw new Error("Invalid credentials");
+              }
 
-            const shaKey = createShaHash(secretKey, salt);
+              const shaKey = createShaHash(secretKey, salt);
 
-            await this.prisma.apiKey.update({
-              where: { publicKey },
-              data: {
-                fastHashedSecretKey: shaKey,
-              },
-            });
-            finalApiKey = convertToRedisRepresentation({
-              ...slowKey,
-              fastHashedSecretKey: shaKey,
-            });
-          }
-
-          if (!finalApiKey) {
-            logger.info("No project id found for key", publicKey);
-            throw new Error("Invalid credentials");
-          }
-
-          addUserToSpan({ projectId: finalApiKey.projectId });
-
-          const plan = finalApiKey.plan;
-
-          if (!isPlan(plan)) {
-            logger.error("Invalid plan type for key", finalApiKey.plan);
-            throw new Error("Invalid credentials");
-          }
-
-          return {
-            validKey: true,
-            scope: {
-              projectId: finalApiKey.projectId,
-              accessLevel: "all",
-              orgId: finalApiKey.orgId,
-              plan: plan,
-              rateLimitOverrides: finalApiKey.rateLimitOverrides ?? [],
-              apiKeyId: finalApiKey.id,
-            },
-          };
-        }
-        // Bearer auth - handles both internal JWT and public key auth
-        if (authHeader.startsWith("Bearer ")) {
-          const token = authHeader.replace("Bearer ", "");
-
-          // Internal JWT auth
-          if (headers["from_internal"] === "true") {
-            const payload = verifyJwt(token) as JwtPayload;
-
-            if (!payload.userId) {
-              return {
-                validKey: false,
-                error: "Invalid JWT payload",
-              };
-            }
-
-            const user = await this.prisma.user.findUnique({
-              where: { id: payload.userId },
-              include: {
-                projects: {
-                  include: {
-                    organization: true,
-                  },
+              await this.prisma.apiKey.update({
+                where: { publicKey },
+                data: {
+                  fastHashedSecretKey: shaKey,
                 },
-              },
-            });
-
-            if (!user) {
-              return {
-                validKey: false,
-                error: "User not found",
-              };
+              });
+              finalApiKey = convertToRedisRepresentation({
+                ...slowKey,
+                fastHashedSecretKey: shaKey,
+              });
             }
 
-            const project = user.projects[0];
-            if (!project) {
-              return {
-                validKey: false,
-                error: "User has no projects",
-              };
+            if (!finalApiKey) {
+              logger.info("No project id found for key", publicKey);
+              throw new Error("Invalid credentials");
             }
 
-            addUserToSpan({ projectId: project.id });
+            addUserToSpan({ projectId: finalApiKey.projectId });
+
+            const plan = finalApiKey.plan;
+
+            if (!isPlan(plan)) {
+              logger.error("Invalid plan type for key", finalApiKey.plan);
+              throw new Error("Invalid credentials");
+            }
 
             return {
               validKey: true,
               scope: {
-                projectId: project.id,
+                projectId: finalApiKey.projectId,
                 accessLevel: "all",
-                orgId: project.organization.id,
-                plan: getOrganizationPlanServerSide(
-                  project.organization.cloudConfig,
-                ),
-                rateLimitOverrides:
-                  project.organization.cloudConfig?.rateLimitOverrides ?? [],
-                apiKeyId: null,
+                orgId: finalApiKey.orgId,
+                plan: plan,
+                rateLimitOverrides: finalApiKey.rateLimitOverrides ?? [],
+                apiKeyId: finalApiKey.id,
+              },
+            };
+          } else {
+            if (!reqPublicKey && reqSecretKey.startsWith("sk-")) {
+              const parts = reqSecretKey.split("-");
+              if (parts.length === 3 && parts[0] === "sk") {
+                publicKey = parts[1];
+                secretKey = parts[2];
+              } else {
+                throw new Error("Invalid API key format");
+              }
+            }
+
+            const salt = env.SALT;
+            const hashFromProvidedKey = createShaHash(secretKey, salt);
+
+            // fetches by redis if available, fallback to postgres
+            const userApiKey =
+              await this.fetchUserApiKeyAndAddToRedis(hashFromProvidedKey);
+
+            let finalApiKey = userApiKey;
+
+            if (!userApiKey || !userApiKey.fastHashedSecretKey) {
+              const slowKey = await this.prisma.userApiKey.findUnique({
+                where: { publicKey },
+                include: { project: { include: { organization: true } } },
+              });
+
+              if (!slowKey) {
+                logger.error("No key found for public key", publicKey);
+                if (this.redis) {
+                  logger.info(
+                    `No key found, storing ${API_KEY_NON_EXISTENT} in redis`,
+                  );
+                  await this.addApiKeyToRedis(
+                    hashFromProvidedKey,
+                    API_KEY_NON_EXISTENT,
+                  );
+                }
+                throw new Error("Invalid credentials");
+              }
+
+              const isValid = await verifySecretKey(
+                secretKey,
+                slowKey.hashedSecretKey,
+              );
+
+              if (!isValid) {
+                logger.debug(`Old key is invalid: ${publicKey}`);
+                throw new Error("Invalid credentials");
+              }
+
+              const shaKey = createShaHash(secretKey, salt);
+
+              await this.prisma.userApiKey.update({
+                where: { publicKey },
+                data: {
+                  fastHashedSecretKey: shaKey,
+                },
+              });
+              finalApiKey = convertToRedisRepresentation({
+                ...slowKey,
+                fastHashedSecretKey: shaKey,
+              });
+            }
+
+            if (!finalApiKey) {
+              logger.info("No project id found for key", publicKey);
+              throw new Error("Invalid credentials");
+            }
+
+            addUserToSpan({ projectId: finalApiKey.projectId });
+
+            const plan = finalApiKey.plan;
+
+            if (!isPlan(plan)) {
+              logger.error("Invalid plan type for key", finalApiKey.plan);
+              throw new Error("Invalid credentials");
+            }
+
+            return {
+              validKey: true,
+              scope: {
+                projectId: finalApiKey.projectId,
+                accessLevel: "all",
+                orgId: finalApiKey.orgId,
+                plan: plan,
+                rateLimitOverrides: finalApiKey.rateLimitOverrides ?? [],
+                apiKeyId: finalApiKey.id,
               },
             };
           }
+        }
+        // Bearer auth, limited scope, only needs public key
+        if (authHeader.startsWith("Bearer ")) {
+          const publicKey = authHeader.replace("Bearer ", "");
 
-          // Public key auth
-          const dbKey = await this.findDbKeyOrThrow(token);
+          const dbKey = await this.findDbKeyOrThrow(publicKey);
 
           addUserToSpan({ projectId: dbKey.projectId });
 
@@ -389,6 +363,42 @@ export class ApiAuthService {
   }
 
   async fetchApiKeyAndAddToRedis(hash: string) {
+    // first get the API key from redis, this does not throw
+    const redisApiKey = await this.fetchApiKeyFromRedis(hash);
+
+    if (redisApiKey === API_KEY_NON_EXISTENT) {
+      recordIncrement("langfuse.api_key.cache_hit", 1);
+      throw new Error("Invalid credentials");
+    }
+
+    // if we found something, return the object.
+    if (redisApiKey) {
+      recordIncrement("langfuse.api_key.cache_hit", 1);
+      return redisApiKey;
+    }
+
+    recordIncrement("langfuse.api_key.cache_miss", 1);
+
+    // if redis not available or object not found, try the database
+    const apiKeyAndOrganisation = await this.prisma.apiKey.findUnique({
+      where: { fastHashedSecretKey: hash },
+      include: { project: { include: { organization: true } } },
+    });
+
+    // add the key to redis for future use if available, this does not throw
+    // only do so if the new hashkey exists already.
+    if (apiKeyAndOrganisation && apiKeyAndOrganisation.fastHashedSecretKey) {
+      await this.addApiKeyToRedis(
+        hash,
+        convertToRedisRepresentation(apiKeyAndOrganisation),
+      );
+    }
+    return apiKeyAndOrganisation
+      ? convertToRedisRepresentation(apiKeyAndOrganisation)
+      : null;
+  }
+
+  async fetchUserApiKeyAndAddToRedis(hash: string) {
     // first get the API key from redis, this does not throw
     const redisApiKey = await this.fetchApiKeyFromRedis(hash);
 
