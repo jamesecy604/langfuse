@@ -15,16 +15,19 @@ import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePos
 import { useUiCustomization } from "@/src/ee/features/ui-customization/useUiCustomization";
 import { env } from "@/src/env.mjs";
 
-export function CreateApiKeyButton(props: { projectId: string }) {
+export function CreateUserApiKeyButton(props: {
+  projectId: string;
+  userId: string;
+}) {
   const utils = api.useUtils();
   const capture = usePostHogClientCapture();
   const hasAccess = useHasProjectAccess({
     projectId: props.projectId,
-    scope: "apiKeys:CUD",
+    scope: "userApiKeys:CUD",
   });
 
-  const mutCreateApiKey = api.apiKeys.create.useMutation({
-    onSuccess: () => utils.apiKeys.invalidate(),
+  const mutCreateApiKey = api.userApiKeys.create.useMutation({
+    onSuccess: () => utils.userApiKeys.invalidate(),
   });
   const [open, setOpen] = useState(false);
   const [generatedKeys, setGeneratedKeys] = useState<{
@@ -40,6 +43,7 @@ export function CreateApiKeyButton(props: { projectId: string }) {
       mutCreateApiKey
         .mutateAsync({
           projectId: props.projectId,
+          userId: props.userId,
         })
         .then(({ secretKey, publicKey }) => {
           setGeneratedKeys({
@@ -76,13 +80,8 @@ export function CreateApiKeyButton(props: { projectId: string }) {
             <div className="mt-4 max-w-full">
               <div className="text-md my-2 font-semibold">Usage</div>
               <QuickstartExamples
-                secretKey={
-                  "sk-" +
-                  generatedKeys.publicKey +
-                  "-" +
-                  generatedKeys.secretKey
-                }
-                publicKey={generatedKeys.publicKey}
+                secretKey={`sk-${generatedKeys.publicKey}-${generatedKeys.secretKey}`}
+                publicKey={`${generatedKeys.publicKey}`}
               />
             </div>
           )}
@@ -108,18 +107,17 @@ export const ApiKeyRender = ({
         </div>
         <CodeView
           content={
-            generatedKeys?.secretKey
-              ? "sk-" +
-                generatedKeys?.publicKey +
-                "-" +
-                generatedKeys?.secretKey
+            generatedKeys
+              ? `sk-${generatedKeys.publicKey}-${generatedKeys.secretKey}`
               : "Loading ..."
           }
         />
       </div>
       <div className="mb-4">
         <div className="text-md mb-2 font-semibold">Public Key</div>
-        <CodeView content={generatedKeys?.publicKey ?? "Loading ..."} />
+        <CodeView
+          content={generatedKeys ? `${generatedKeys.publicKey}` : "Loading ..."}
+        />
       </div>
       <div>
         <div className="text-md mb-2 font-semibold">Host</div>

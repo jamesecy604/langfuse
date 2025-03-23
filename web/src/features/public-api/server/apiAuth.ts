@@ -99,6 +99,30 @@ export class ApiAuthService {
     return true;
   }
 
+  async deleteUserApiKey(id: string, userId: string) {
+    // Make sure the API key exists and belongs to the project the user has access to
+    const apiKey = await this.prisma.userApiKey.findFirstOrThrow({
+      where: {
+        id: id,
+        userId: userId,
+      },
+    });
+    if (!apiKey) {
+      return false;
+    }
+
+    // if redis is available, delete the key from there as well
+    // delete from redis even if caching is disabled via env for consistency
+    this.invalidate([apiKey], `key ${id}`);
+
+    await this.prisma.userApiKey.delete({
+      where: {
+        id: apiKey.id,
+      },
+    });
+    return true;
+  }
+
   async verifyAuthHeaderAndReturnScope(
     authHeader: string | undefined,
   ): Promise<AuthHeaderVerificationResult> {

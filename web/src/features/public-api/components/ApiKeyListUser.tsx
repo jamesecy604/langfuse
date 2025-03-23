@@ -20,33 +20,36 @@ import {
   TableRow,
 } from "@/src/components/ui/table";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
-import { CreateApiKeyButton } from "@/src/features/public-api/components/CreateApiKeyButton";
+import { CreateUserApiKeyButton } from "@/src/features/public-api/components/CreateApiKeyButtonUser";
 import { useHasProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
 import { api } from "@/src/utils/api";
 import { DialogDescription } from "@radix-ui/react-dialog";
 import { TrashIcon } from "lucide-react";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Alert, AlertDescription, AlertTitle } from "@/src/components/ui/alert";
 
-export function ApiKeyList(props: { projectId: string }) {
+export function ApiKeyListUser(props: { projectId: string }) {
   const hasAccess = useHasProjectAccess({
     projectId: props.projectId,
-    scope: "apiKeys:read",
+    scope: "userApiKeys:read",
   });
 
-  const apiKeys = api.apiKeys.byProjectId.useQuery(
+  const session = useSession();
+  const apiKeys = api.userApiKeys.byProjectId.useQuery(
     {
       projectId: props.projectId,
+      userId: session.data?.user?.id ?? "",
     },
     {
-      enabled: hasAccess,
+      enabled: hasAccess && !!session.data?.user?.id,
     },
   );
 
   if (!hasAccess) {
     return (
       <div>
-        <Header title="API Keys" />
+        <Header title="My API Keys" />
         <Alert>
           <AlertTitle>Access Denied</AlertTitle>
           <AlertDescription>
@@ -59,7 +62,7 @@ export function ApiKeyList(props: { projectId: string }) {
 
   return (
     <div>
-      <Header title="API Keys" />
+      <Header title="My API Keys" />
       <Card className="mb-4">
         <Table>
           <TableHeader>
@@ -70,7 +73,7 @@ export function ApiKeyList(props: { projectId: string }) {
               <TableHead className="text-primary">Note</TableHead>
               <TableHead className="text-primary">Public Key</TableHead>
               <TableHead className="text-primary">Secret Key</TableHead>
-              {/* <TableHead className="text-primary">Last used</TableHead> */}
+
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -96,19 +99,17 @@ export function ApiKeyList(props: { projectId: string }) {
                   <TableCell className="font-mono">
                     <CodeView
                       className="inline-block text-xs"
-                      content={apiKey.publicKey}
+                      content={`${apiKey.publicKey}`}
                     />
                   </TableCell>
                   <TableCell className="font-mono">
-                    {apiKey.displaySecretKey}
+                    {`sk-${apiKey.publicKey}-${apiKey.displaySecretKey}`}
                   </TableCell>
-                  {/* <TableCell>
-                  {apiKey.lastUsedAt?.toLocaleDateString() ?? "Never"}
-                </TableCell> */}
                   <TableCell>
                     <DeleteApiKeyButton
                       projectId={props.projectId}
                       apiKeyId={apiKey.id}
+                      publicKey={apiKey.publicKey}
                     />
                   </TableCell>
                 </TableRow>
@@ -117,22 +118,29 @@ export function ApiKeyList(props: { projectId: string }) {
           </TableBody>
         </Table>
       </Card>
-      <CreateApiKeyButton projectId={props.projectId} />
+      <CreateUserApiKeyButton
+        projectId={props.projectId}
+        userId={session.data?.user?.id ?? ""}
+      />
     </div>
   );
 }
 
-// show dialog to let user confirm that this is a destructive action
-function DeleteApiKeyButton(props: { projectId: string; apiKeyId: string }) {
+function DeleteApiKeyButton(props: {
+  projectId: string;
+  apiKeyId: string;
+  publicKey: string;
+}) {
+  const session = useSession();
   const capture = usePostHogClientCapture();
   const hasAccess = useHasProjectAccess({
     projectId: props.projectId,
-    scope: "apiKeys:CUD",
+    scope: "userApiKeys:CUD",
   });
 
   const utils = api.useUtils();
-  const mutDeleteApiKey = api.apiKeys.delete.useMutation({
-    onSuccess: () => utils.apiKeys.invalidate(),
+  const mutDeleteApiKey = api.userApiKeys.delete.useMutation({
+    onSuccess: () => utils.userApiKeys.invalidate(),
   });
   const [open, setOpen] = useState(false);
 
@@ -161,6 +169,7 @@ function DeleteApiKeyButton(props: { projectId: string; apiKeyId: string }) {
                 .mutateAsync({
                   projectId: props.projectId,
                   id: props.apiKeyId,
+                  userId: session.data?.user?.id ?? "",
                 })
                 .then(() => {
                   capture("project_settings:api_key_delete");
@@ -190,15 +199,16 @@ function ApiKeyNote({
   apiKey: { id: string; note: string | null };
   projectId: string;
 }) {
+  const session = useSession();
   const utils = api.useUtils();
-  const updateNote = api.apiKeys.updateNote.useMutation({
+  const updateNote = api.userApiKeys.updateNote.useMutation({
     onSuccess: () => {
-      utils.apiKeys.invalidate();
+      utils.userApiKeys.invalidate();
     },
   });
   const hasEditAccess = useHasProjectAccess({
     projectId,
-    scope: "apiKeys:CUD",
+    scope: "userApiKeys:CUD",
   });
 
   const [note, setNote] = useState(apiKey.note ?? "");
@@ -211,6 +221,7 @@ function ApiKeyNote({
         projectId,
         keyId: apiKey.id,
         note,
+        userId: session.data?.user?.id ?? "",
       });
     }
   };

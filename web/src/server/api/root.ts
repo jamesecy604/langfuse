@@ -5,6 +5,7 @@ import { scoresRouter } from "./routers/scores";
 import { dashboardRouter } from "@/src/features/dashboard/server/dashboard-router";
 import { projectsRouter } from "@/src/features/projects/server/projectsRouter";
 import { apiKeysRouter } from "@/src/features/public-api/server/apiKeyRouter";
+import { userApiKeysRouter } from "@/src/features/public-api/server/userApiKeyRouter";
 import { membersRouter } from "@/src/features/rbac/server/membersRouter";
 import { userRouter } from "@/src/server/api/routers/users";
 import { datasetRouter } from "@/src/features/datasets/server/dataset-router";
@@ -51,6 +52,7 @@ export const appRouter = createTRPCRouter({
   projects: projectsRouter,
   users: userRouter,
   apiKeys: apiKeysRouter,
+  userApiKeys: userApiKeysRouter,
   members: membersRouter,
   datasets: datasetRouter,
   cloudBilling: cloudBillingRouter,

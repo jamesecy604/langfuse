@@ -158,23 +158,16 @@ export const ROUTES: Route[] = [
     bottom: true,
   },
   {
+    title: "My API Keys",
+    pathname: "/project/[projectId]/settings/user-api-keys",
+    icon: TerminalIcon,
+    bottom: true,
+  },
+  {
     title: "Settings",
     pathname: "/organization/[organizationId]/settings",
     icon: Settings,
     bottom: true,
-  },
-  {
-    title: "User API Keys",
-    pathname: "/api-keys",
-    icon: FileJson,
-    bottom: true,
-  },
-  {
-    title: "User API Keys",
-    pathname: "/api-keys",
-    icon: FileJson,
-    bottom: true,
-    show: ({ organization }) => organization === undefined,
   },
   {
     title: "Support",

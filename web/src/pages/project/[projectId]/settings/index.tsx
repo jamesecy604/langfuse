@@ -1,5 +1,6 @@
 import Header from "@/src/components/layouts/header";
 import { ApiKeyList } from "@/src/features/public-api/components/ApiKeyList";
+import { ApiKeyListUser } from "@/src/features/public-api/components/ApiKeyListUser";
 import { DeleteProjectButton } from "@/src/features/projects/components/DeleteProjectButton";
 import { HostNameProject } from "@/src/features/projects/components/HostNameProject";
 import RenameProject from "@/src/features/projects/components/RenameProject";
@@ -112,12 +113,22 @@ export const getProjectSettingsPages = ({
     ),
   },
   {
-    title: "API Keys",
+    title: "Project API Keys",
     slug: "api-keys",
     cmdKKeywords: ["auth", "public key", "secret key"],
     content: (
       <div className="flex flex-col gap-6">
         <ApiKeyList projectId={project.id} />
+      </div>
+    ),
+  },
+  {
+    title: "My API Keys",
+    slug: "user-api-keys",
+    cmdKKeywords: ["auth", "public key", "secret key", "personal"],
+    content: (
+      <div className="flex flex-col gap-6">
+        <ApiKeyListUser projectId={project.id} />
       </div>
     ),
   },

@@ -6,6 +6,7 @@ import {
 
 export type AuditableResource =
   | "annotationQueue"
+  | "userApiKey"
   | "annotationQueueItem"
   | "organization"
   | "orgMembership"

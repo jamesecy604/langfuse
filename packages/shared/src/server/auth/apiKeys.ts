@@ -23,6 +23,52 @@ async function generateKeySet() {
   };
 }
 
+export async function createAndAddUserApiKeysToDb(p: {
+  prisma: PrismaClient;
+  projectId: string;
+  userId: string;
+  note?: string;
+  predefinedKeys?: {
+    secretKey: string;
+    publicKey: string;
+  };
+}) {
+  const salt = env.SALT;
+  if (!salt) {
+    throw new Error("SALT is not set");
+  }
+
+  const { pk, sk } = p.predefinedKeys
+    ? { pk: p.predefinedKeys.publicKey, sk: p.predefinedKeys.secretKey }
+    : await generateKeySet();
+
+  const hashedSk = await hashSecretKey(sk);
+  const displaySk = getDisplaySecretKey(sk);
+
+  const hashFromProvidedKey = createShaHash(sk, salt);
+
+  const apiKey = await p.prisma.userApiKey.create({
+    data: {
+      projectId: p.projectId,
+      userId: p.userId,
+      publicKey: pk,
+      hashedSecretKey: hashedSk,
+      displaySecretKey: displaySk,
+      fastHashedSecretKey: hashFromProvidedKey,
+      note: p.note,
+    },
+  });
+
+  return {
+    id: apiKey.id,
+    createdAt: apiKey.createdAt,
+    note: apiKey.note,
+    publicKey: apiKey.publicKey,
+    secretKey: sk,
+    displaySecretKey: displaySk,
+  };
+}
+
 export async function verifySecretKey(key: string, hashedKey: string) {
   const isValid = await compare(key, hashedKey);
   return isValid;
