@@ -147,17 +147,19 @@ export class ApiAuthService {
             const salt = env.SALT;
             const hashFromProvidedKey = createShaHash(secretKey, salt);
 
-            // fetches by redis if available, fallback to postgres
-            // api key from redis does
-            const apiKey =
-              await this.fetchApiKeyAndAddToRedis(hashFromProvidedKey);
+            // Fetch from redis or fallback to postgres
+            const userApiKey =
+              await this.fetchUserApiKeyAndAddToRedis(hashFromProvidedKey);
 
-            let finalApiKey = apiKey;
+            let finalUserApiKey = userApiKey;
 
-            if (!apiKey || !apiKey.fastHashedSecretKey) {
-              const slowKey = await this.prisma.apiKey.findUnique({
+            if (!userApiKey || !userApiKey.fastHashedSecretKey) {
+              const slowKey = await this.prisma.userApiKey.findUnique({
                 where: { publicKey },
-                include: { project: { include: { organization: true } } },
+                include: {
+                  project: { include: { organization: true } },
+                  user: true, // Include user relation
+                },
               });
 
               if (!slowKey) {
@@ -186,41 +188,47 @@ export class ApiAuthService {
 
               const shaKey = createShaHash(secretKey, salt);
 
-              await this.prisma.apiKey.update({
+              await this.prisma.userApiKey.update({
                 where: { publicKey },
                 data: {
                   fastHashedSecretKey: shaKey,
                 },
               });
-              finalApiKey = convertToRedisRepresentation({
+
+              finalUserApiKey = convertToRedisRepresentation({
                 ...slowKey,
                 fastHashedSecretKey: shaKey,
               });
             }
 
-            if (!finalApiKey) {
+            if (!finalUserApiKey) {
               logger.info("No project id found for key", publicKey);
               throw new Error("Invalid credentials");
             }
 
-            addUserToSpan({ projectId: finalApiKey.projectId });
+            // Add userId to tracing
+            addUserToSpan({
+              userId: finalUserApiKey.userId,
+              projectId: finalUserApiKey.projectId,
+            });
 
-            const plan = finalApiKey.plan;
+            const plan = finalUserApiKey.plan;
 
             if (!isPlan(plan)) {
-              logger.error("Invalid plan type for key", finalApiKey.plan);
+              logger.error("Invalid plan type for key", finalUserApiKey.plan);
               throw new Error("Invalid credentials");
             }
 
             return {
               validKey: true,
               scope: {
-                projectId: finalApiKey.projectId,
+                projectId: finalUserApiKey.projectId,
+                userId: finalUserApiKey.userId, // Add userId to scope
                 accessLevel: "all",
-                orgId: finalApiKey.orgId,
+                orgId: finalUserApiKey.orgId,
                 plan: plan,
-                rateLimitOverrides: finalApiKey.rateLimitOverrides ?? [],
-                apiKeyId: finalApiKey.id,
+                rateLimitOverrides: finalUserApiKey.rateLimitOverrides ?? [],
+                apiKeyId: finalUserApiKey.id,
               },
             };
           } else {
@@ -404,7 +412,7 @@ export class ApiAuthService {
     recordIncrement("langfuse.api_key.cache_miss", 1);
 
     // if redis not available or object not found, try the database
-    const apiKeyAndOrganisation = await this.prisma.apiKey.findUnique({
+    const apiKeyAndOrganisation = await this.prisma.userApiKey.findUnique({
       where: { fastHashedSecretKey: hash },
       include: { project: { include: { organization: true } } },
     });
@@ -440,21 +448,28 @@ export class ApiAuthService {
     recordIncrement("langfuse.api_key.cache_miss", 1);
 
     // if redis not available or object not found, try the database
-    const apiKeyAndOrganisation = await this.prisma.apiKey.findUnique({
+    const userApiKeyAndOrganisation = await this.prisma.userApiKey.findUnique({
       where: { fastHashedSecretKey: hash },
-      include: { project: { include: { organization: true } } },
+      include: {
+        project: { include: { organization: true } },
+        user: true, // Include user relation
+      },
     });
 
     // add the key to redis for future use if available, this does not throw
     // only do so if the new hashkey exists already.
-    if (apiKeyAndOrganisation && apiKeyAndOrganisation.fastHashedSecretKey) {
+    if (
+      userApiKeyAndOrganisation &&
+      userApiKeyAndOrganisation.fastHashedSecretKey
+    ) {
       await this.addApiKeyToRedis(
         hash,
-        convertToRedisRepresentation(apiKeyAndOrganisation),
+        convertToRedisRepresentation(userApiKeyAndOrganisation),
       );
     }
-    return apiKeyAndOrganisation
-      ? convertToRedisRepresentation(apiKeyAndOrganisation)
+
+    return userApiKeyAndOrganisation
+      ? convertToRedisRepresentation(userApiKeyAndOrganisation)
       : null;
   }
 
@@ -531,6 +546,9 @@ export const convertToRedisRepresentation = (
         cloudConfig: Prisma.JsonValue;
       };
     };
+    user?: {
+      id: string;
+    };
   },
 ) => {
   const {
@@ -549,6 +567,7 @@ export const convertToRedisRepresentation = (
     orgId,
     plan: getOrganizationPlanServerSide(parsedCloudConfig),
     rateLimitOverrides: parsedCloudConfig?.rateLimitOverrides,
+    userId: apiKeyAndOrganisation.user?.id,
   });
 
   if (!orgId) {

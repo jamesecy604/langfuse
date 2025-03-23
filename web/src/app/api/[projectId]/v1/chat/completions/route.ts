@@ -42,9 +42,9 @@ export async function POST(
 
   // Find key by public key
 
-  const apiKeyRecord = await prisma.apiKey.findUnique({
+  const apiKeyRecord = await prisma.userApiKey.findUnique({
     where: { publicKey },
-    include: { project: true },
+    include: { project: true, user: true },
   });
 
   if (!apiKeyRecord) {
@@ -65,14 +65,15 @@ export async function POST(
 
   // Initialize Langfuse with projectId from path parameter
   const langfuse = new Langfuse({
-    publicKey: "9b3cf6b62ac64a3ab1f9332623b841a1",
-    secretKey: "27b0bb1282434147909f74b395b99228",
+    publicKey: "40258a5c91e741ffbb68b902e4227821",
+    secretKey: "5c86fc91192245238c3d09e4818aee99",
     baseUrl: "http://localhost:3000",
     _projectId: params.projectId,
   });
 
   // Declare trace and requestSpan at function scope
   const trace = langfuse.trace({
+    userId: apiKeyRecord.userId,
     name: "chat-completion",
     metadata: {
       method: request.method,
