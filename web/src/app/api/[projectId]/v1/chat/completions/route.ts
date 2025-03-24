@@ -230,9 +230,9 @@ export async function POST(
                 totalTokens: Math.floor(usage.total_tokens),
               },
               costDetails: {
-                inputCost: costDetail.inputCost,
-                outputCost: costDetail.outputCost,
-                totalCost: costDetail.inputCost + costDetail.outputCost,
+                input: costDetail.inputCost,
+                output: costDetail.outputCost,
+                total: costDetail.inputCost + costDetail.outputCost,
               },
               metadata: {
                 cost: {
@@ -323,9 +323,9 @@ export async function POST(
             totalTokens: response.usage?.total_tokens || 0,
           },
           costDetails: {
-            inputCost: costDetail.inputCost,
-            outputCost: costDetail.outputCost,
-            totalCost: costDetail.inputCost + costDetail.outputCost,
+            input: costDetail.inputCost,
+            output: costDetail.outputCost,
+            total: costDetail.inputCost + costDetail.outputCost,
           },
           metadata: {
             cost: {
