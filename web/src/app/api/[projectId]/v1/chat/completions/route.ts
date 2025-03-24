@@ -2,6 +2,8 @@ import { OpenAI } from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { Langfuse } from "langfuse";
 import { prisma } from "../../../../../../../../packages/shared/src/db";
+import { decrypt } from "../../../../../../../../packages/shared/src/encryption";
+import { Decimal } from "@prisma/client/runtime/library";
 import { NextResponse } from "next/server";
 import {
   createShaHash,
@@ -79,20 +81,6 @@ export async function POST(
   });
 
   try {
-    // Add CORS headers
-    const headers = new Headers();
-    headers.set("Access-Control-Allow-Origin", "*");
-    headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    headers.set("Access-Control-Allow-Headers", "Content-Type");
-
-    // Handle OPTIONS request for CORS preflight
-    if (request.method === "OPTIONS") {
-      return NextResponse.json(null, {
-        headers: Object.fromEntries(headers),
-        status: 200,
-      });
-    }
-
     const body = await request.json();
     trace.update({
       input: body,
@@ -107,9 +95,58 @@ export async function POST(
     const { model, messages, temperature, stream } = body;
 
     // Initialize OpenAI API
+    // Get model configuration
+    const modelConfig = await prisma.model.findFirst({
+      where: {
+        projectId: params.projectId,
+        modelName: body.model,
+      },
+    });
+
+    if (!modelConfig) {
+      return NextResponse.json(
+        { error: `Model configuration not found for ${body.model}` },
+        { status: 404 },
+      );
+    }
+
+    // Get LLM API credentials for the project
+    if (!modelConfig.projectId) {
+      return NextResponse.json(
+        {
+          error: `Model configuration has no associated project`,
+        },
+        { status: 404 },
+      );
+    }
+
+    const llmConfig = await prisma.llmApiKeys.findFirst({
+      where: {
+        projectId: modelConfig.projectId,
+      },
+    });
+
+    if (!llmConfig) {
+      return NextResponse.json(
+        {
+          error: `LLM API credentials not configured for project ${params.projectId}`,
+        },
+        { status: 404 },
+      );
+    }
+
+    // Decrypt the API key
+    const decryptedKey = await decrypt(llmConfig.secretKey);
+    if (!decryptedKey) {
+      return NextResponse.json(
+        { error: "Failed to decrypt API key" },
+        { status: 500 },
+      );
+    }
+
     const api = new OpenAI({
-      apiKey: "sk-24b0ef07b7ff4832bd505f177dac6a77",
-      baseURL: "https://api.deepseek.com",
+      apiKey: decryptedKey,
+      baseURL: llmConfig.baseURL,
     });
 
     if (stream) {
@@ -120,7 +157,7 @@ export async function POST(
 
       // Handle streaming response
       const responseStream = await api.chat.completions.create({
-        model: "deepseek-chat",
+        model: model,
         messages,
         temperature: temperature ?? 0.7,
         stream: true,
@@ -170,6 +207,21 @@ export async function POST(
             controller.close();
 
             // End generation with final output using accumulated usage
+            const inputPrice = modelConfig.inputPrice
+              ? Number(modelConfig.inputPrice)
+              : 0;
+            const outputPrice = modelConfig.outputPrice
+              ? Number(modelConfig.outputPrice)
+              : 0;
+
+            const costDetail = {
+              inputCost: parseFloat(
+                ((usage.prompt_tokens * inputPrice) / 1000).toFixed(6),
+              ),
+              outputCost: parseFloat(
+                ((usage.completion_tokens * outputPrice) / 1000).toFixed(6),
+              ),
+            };
             streamingGeneration.end({
               output: completionText,
               usage: {
@@ -178,15 +230,17 @@ export async function POST(
                 totalTokens: Math.floor(usage.total_tokens),
               },
               costDetails: {
-                inputCost: (usage.prompt_tokens * 0.0015) / 1000,
-                outputCost: (usage.completion_tokens * 0.002) / 1000,
-                totalCost: (usage.total_tokens * 0.0015) / 1000,
+                inputCost: costDetail.inputCost,
+                outputCost: costDetail.outputCost,
+                totalCost: costDetail.inputCost + costDetail.outputCost,
               },
               metadata: {
                 cost: {
-                  input: (usage.prompt_tokens * 0.0015) / 1000,
-                  output: (usage.completion_tokens * 0.002) / 1000,
-                  total: (usage.total_tokens * 0.0015) / 1000,
+                  input: costDetail.inputCost,
+                  output: costDetail.outputCost,
+                  total: parseFloat(
+                    (costDetail.inputCost + costDetail.outputCost).toFixed(6),
+                  ),
                 },
               },
             });
@@ -208,7 +262,6 @@ export async function POST(
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
-          ...Object.fromEntries(headers),
         },
       });
     } else {
@@ -219,7 +272,7 @@ export async function POST(
       });
 
       const response = await api.chat.completions.create({
-        model: "deepseek-chat",
+        model: model,
         messages,
         temperature: temperature ?? 0.7,
         stream: false,
@@ -242,6 +295,26 @@ export async function POST(
         });
 
         // Track completion response with full details
+        const inputPrice = modelConfig.inputPrice
+          ? Number(modelConfig.inputPrice)
+          : 0;
+        const outputPrice = modelConfig.outputPrice
+          ? Number(modelConfig.outputPrice)
+          : 0;
+
+        const costDetail = {
+          inputCost:
+            Math.round(
+              (((response.usage?.prompt_tokens || 0) * inputPrice) / 1000) *
+                1000000,
+            ) / 1000000,
+          outputCost:
+            Math.round(
+              (((response.usage?.completion_tokens || 0) * outputPrice) /
+                1000) *
+                1000000,
+            ) / 1000000,
+        };
         completionGeneration.end({
           output: response.choices[0]?.message?.content || "",
           usage: {
@@ -249,11 +322,16 @@ export async function POST(
             completionTokens: response.usage?.completion_tokens || 0,
             totalTokens: response.usage?.total_tokens || 0,
           },
+          costDetails: {
+            inputCost: costDetail.inputCost,
+            outputCost: costDetail.outputCost,
+            totalCost: costDetail.inputCost + costDetail.outputCost,
+          },
           metadata: {
             cost: {
-              input: ((response.usage?.prompt_tokens || 0) * 0.0015) / 1000,
-              output: ((response.usage?.completion_tokens || 0) * 0.002) / 1000,
-              total: ((response.usage?.total_tokens || 0) * 0.0015) / 1000,
+              input: costDetail.inputCost,
+              output: costDetail.outputCost,
+              total: costDetail.inputCost + costDetail.outputCost,
             },
           },
         });
