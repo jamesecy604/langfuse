@@ -57,6 +57,13 @@ export async function POST(
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
+  if (apiKeyRecord.projectId !== params.projectId) {
+    return NextResponse.json(
+      { error: "You are not authorized to the project by the api key." },
+      { status: 401 },
+    );
+  }
+
   // Initialize Langfuse with projectId from path parameter
   const langfuse = new Langfuse({
     publicKey: publicKey,
