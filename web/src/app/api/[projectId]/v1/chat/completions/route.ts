@@ -7,6 +7,8 @@ import {
   createShaHash,
   verifySecretKey,
 } from "../../../../../../../../packages/shared/src/server/auth/apiKeys";
+import { ApiAuthService } from "@/src/features/public-api/server/apiAuth";
+import { redis } from "@langfuse/shared/src/server";
 
 export async function POST(
   request: Request,
@@ -42,31 +44,21 @@ export async function POST(
 
   // Find key by public key
 
-  const apiKeyRecord = await prisma.userApiKey.findUnique({
-    where: { publicKey },
-    include: { project: true, user: true },
-  });
-
-  if (!apiKeyRecord) {
-    return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
-  }
-  console.log("SecretKey", secretKey);
   // Hash the provided secret key using Langfuse's standard method
-  const hashedSecretKey = createShaHash(secretKey, process.env.SALT);
-  console.log("hashedSecretKey", hashedSecretKey);
-  console.log(
-    "apiKeyRecord.fastHashedSecretKey",
-    apiKeyRecord.fastHashedSecretKey,
-  );
+  const hashFromProvidedKey = createShaHash(secretKey, process.env.SALT);
+  const apiKeyRecord = await new ApiAuthService(
+    prisma,
+    redis,
+  ).fetchUserApiKeyAndAddToRedis(hashFromProvidedKey);
   // Compare with stored fast hashed secret key
-  if (hashedSecretKey !== apiKeyRecord.fastHashedSecretKey) {
+  if (hashFromProvidedKey !== apiKeyRecord?.fastHashedSecretKey) {
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
   // Initialize Langfuse with projectId from path parameter
   const langfuse = new Langfuse({
-    publicKey: "40258a5c91e741ffbb68b902e4227821",
-    secretKey: "5c86fc91192245238c3d09e4818aee99",
+    publicKey: publicKey,
+    secretKey: secretKey,
     baseUrl: "http://localhost:3000",
     _projectId: params.projectId,
   });

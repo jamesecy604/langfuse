@@ -283,16 +283,21 @@ export class ApiAuthService {
 
               const shaKey = createShaHash(secretKey, salt);
 
-              await this.prisma.userApiKey.update({
-                where: { publicKey },
-                data: {
-                  fastHashedSecretKey: shaKey,
-                },
-              });
+              // Update fastHashedSecretKey if it's different
+              if (slowKey.fastHashedSecretKey !== shaKey) {
+                await this.prisma.userApiKey.update({
+                  where: { publicKey },
+                  data: {
+                    fastHashedSecretKey: shaKey,
+                  },
+                });
+              }
               finalApiKey = convertToRedisRepresentation({
                 ...slowKey,
                 fastHashedSecretKey: shaKey,
               });
+              // Add to Redis with the new hash
+              await this.addApiKeyToRedis(shaKey, finalApiKey);
             }
 
             if (!finalApiKey) {
@@ -370,6 +375,93 @@ export class ApiAuthService {
     });
   }
 
+  async verifyAuthHeaderAndReturnUserId(
+    authHeader: string | undefined,
+  ): Promise<string | undefined> {
+    if (!authHeader) {
+      logger.error("No authorization header");
+      return undefined;
+    }
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      throw new Error("No Bearer");
+    }
+    const apiKeyValue = authHeader.substring(7);
+    const keyParts = apiKeyValue.split("-");
+    if (keyParts.length !== 3) {
+      throw new Error(
+        "Invalid API key format - must be in format sk-<publicKey>-<secretKey>",
+      );
+    }
+    const publicKey = keyParts[1];
+    const secretKey = keyParts[2];
+    if (publicKey && secretKey) {
+      const salt = env.SALT;
+      const hashFromProvidedKey = createShaHash(secretKey, salt);
+
+      // Fetch from redis or fallback to postgres
+      const userApiKey =
+        await this.fetchUserApiKeyAndAddToRedis(hashFromProvidedKey);
+
+      let finalUserApiKey = userApiKey;
+
+      if (!userApiKey || !userApiKey.fastHashedSecretKey) {
+        const slowKey = await this.prisma.userApiKey.findUnique({
+          where: { publicKey },
+          include: {
+            project: { include: { organization: true } },
+            user: true, // Include user relation
+          },
+        });
+
+        if (!slowKey) {
+          logger.error("No key found for public key", publicKey);
+          if (this.redis) {
+            logger.info(
+              `No key found, storing ${API_KEY_NON_EXISTENT} in redis`,
+            );
+            await this.addApiKeyToRedis(
+              hashFromProvidedKey,
+              API_KEY_NON_EXISTENT,
+            );
+          }
+          throw new Error("Invalid credentials");
+        }
+
+        const isValid = await verifySecretKey(
+          secretKey,
+          slowKey.hashedSecretKey,
+        );
+
+        if (!isValid) {
+          logger.debug(`Old key is invalid: ${publicKey}`);
+          throw new Error("Invalid credentials");
+        }
+
+        const shaKey = createShaHash(secretKey, salt);
+
+        await this.prisma.userApiKey.update({
+          where: { publicKey },
+          data: {
+            fastHashedSecretKey: shaKey,
+          },
+        });
+
+        finalUserApiKey = convertToRedisRepresentation({
+          ...slowKey,
+          fastHashedSecretKey: shaKey,
+        });
+      }
+
+      if (!finalUserApiKey) {
+        logger.info("No project id found for key", publicKey);
+        throw new Error("Invalid credentials");
+      }
+      return finalUserApiKey.userId;
+    } else {
+      return undefined;
+    }
+  }
+
   extractBasicAuthCredentials(basicAuthHeader: string): {
     username: string;
     password: string;
@@ -444,7 +536,7 @@ export class ApiAuthService {
       recordIncrement("langfuse.api_key.cache_hit", 1);
       return redisApiKey;
     }
-
+    console.log("=======================================================");
     recordIncrement("langfuse.api_key.cache_miss", 1);
 
     // if redis not available or object not found, try the database
@@ -457,13 +549,11 @@ export class ApiAuthService {
     });
 
     // add the key to redis for future use if available, this does not throw
-    // only do so if the new hashkey exists already.
-    if (
-      userApiKeyAndOrganisation &&
-      userApiKeyAndOrganisation.fastHashedSecretKey
-    ) {
+    if (userApiKeyAndOrganisation) {
+      // Ensure we're using the correct fastHashedSecretKey
+      const redisKey = userApiKeyAndOrganisation.fastHashedSecretKey || hash;
       await this.addApiKeyToRedis(
-        hash,
+        redisKey,
         convertToRedisRepresentation(userApiKeyAndOrganisation),
       );
     }
