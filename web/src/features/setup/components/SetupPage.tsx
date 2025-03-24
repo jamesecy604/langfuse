@@ -13,7 +13,7 @@ import { NewOrganizationForm } from "@/src/features/organizations/components/New
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
 import { NewProjectForm } from "@/src/features/projects/components/NewProjectForm";
 import { useQueryProjectOrOrganization } from "@/src/features/projects/hooks";
-import { ApiKeyRender } from "@/src/features/public-api/components/CreateApiKeyButton";
+import { ApiKeyRender } from "@/src/features/public-api/components/CreateApiKeyButtonUser";
 import { QuickstartExamples } from "@/src/features/public-api/components/QuickstartExamples";
 import { MembershipInvitesPage } from "@/src/features/rbac/components/MembershipInvitesPage";
 import { MembersTable } from "@/src/features/rbac/components/MembersTable";
@@ -29,6 +29,7 @@ import { type RouterOutput } from "@/src/utils/types";
 import { Check } from "lucide-react";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { StringParam, useQueryParam } from "use-query-params";
 
 // Multi-step setup process
@@ -250,12 +251,14 @@ const TracingSetup = ({
   hasAnyTrace?: boolean;
 }) => {
   const [apiKeys, setApiKeys] = useState<
-    RouterOutput["apiKeys"]["create"] | null
+    RouterOutput["userApiKeys"]["create"] | null
   >(null);
+  const [error, setError] = useState<string | null>(null);
   const utils = api.useUtils();
-  const mutCreateApiKey = api.apiKeys.create.useMutation({
+  const { data: session } = useSession();
+  const mutCreateApiKey = api.userApiKeys.create.useMutation({
     onSuccess: () => {
-      utils.apiKeys.invalidate();
+      utils.userApiKeys.invalidate();
       showChat();
     },
   });
@@ -263,23 +266,25 @@ const TracingSetup = ({
 
   useEffect(() => {
     const createApiKey = async () => {
-      if (projectId && !isLoadingRef.current && !apiKeys) {
+      if (projectId && !isLoadingRef.current && !apiKeys && session?.user?.id) {
         isLoadingRef.current = true;
+        setError(null);
         try {
-          const apiKey = await mutCreateApiKey.mutateAsync({ projectId });
+          const apiKey = await mutCreateApiKey.mutateAsync({
+            projectId,
+            userId: session.user.id,
+          });
           setApiKeys(apiKey);
         } catch (error) {
           console.error("Error creating API key:", error);
+          setError("Failed to create API key. Please try again.");
         } finally {
           isLoadingRef.current = false;
         }
       }
     };
-    if (!apiKeys) {
-      createApiKey();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    createApiKey();
+  }, [projectId, session?.user?.id]);
 
   return (
     <div className="space-y-8">
