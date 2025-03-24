@@ -108,6 +108,15 @@ export async function POST(
         projectId: params.projectId,
         modelName: body.model,
       },
+      include: {
+        Price: {
+          where: {
+            usageType: {
+              in: ["input", "output"],
+            },
+          },
+        },
+      },
     });
 
     if (!modelConfig) {
@@ -214,11 +223,20 @@ export async function POST(
             controller.close();
 
             // End generation with final output using accumulated usage
-            const inputPrice = modelConfig.inputPrice
-              ? Number(modelConfig.inputPrice)
+            const inputPrice = modelConfig.Price?.find(
+              (p) => p.usageType === "input",
+            )?.price
+              ? Number(
+                  modelConfig.Price.find((p) => p.usageType === "input")?.price,
+                )
               : 0;
-            const outputPrice = modelConfig.outputPrice
-              ? Number(modelConfig.outputPrice)
+            const outputPrice = modelConfig.Price?.find(
+              (p) => p.usageType === "output",
+            )?.price
+              ? Number(
+                  modelConfig.Price.find((p) => p.usageType === "output")
+                    ?.price,
+                )
               : 0;
 
             const costDetail = {
@@ -302,11 +320,19 @@ export async function POST(
         });
 
         // Track completion response with full details
-        const inputPrice = modelConfig.inputPrice
-          ? Number(modelConfig.inputPrice)
+        const inputPrice = modelConfig.Price?.find(
+          (p) => p.usageType === "input",
+        )?.price
+          ? Number(
+              modelConfig.Price.find((p) => p.usageType === "input")?.price,
+            )
           : 0;
-        const outputPrice = modelConfig.outputPrice
-          ? Number(modelConfig.outputPrice)
+        const outputPrice = modelConfig.Price?.find(
+          (p) => p.usageType === "output",
+        )?.price
+          ? Number(
+              modelConfig.Price.find((p) => p.usageType === "output")?.price,
+            )
           : 0;
 
         const costDetail = {
