@@ -23,7 +23,7 @@ declare module "next-auth" {
       enableExperimentalFeatures: boolean;
       disableExpensivePostgresQueries: boolean;
       // Enables features that are only available under an enterprise/commercial license when self-hosting Langfuse
-      selfHostedInstancePlan: Plan | null;
+      selfHostedInstancePlan: Plan;
     };
   }
 
