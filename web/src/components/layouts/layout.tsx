@@ -95,6 +95,23 @@ function useSessionWithRetryOnUnauthenticated() {
 
 export default function Layout(props: PropsWithChildren) {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const handleStart = () => setIsLoading(true);
+    const handleComplete = () => setIsLoading(false);
+
+    router.events.on("routeChangeStart", handleStart);
+    router.events.on("routeChangeComplete", handleComplete);
+    router.events.on("routeChangeError", handleComplete);
+
+    return () => {
+      router.events.off("routeChangeStart", handleStart);
+      router.events.off("routeChangeComplete", handleComplete);
+      router.events.off("routeChangeError", handleComplete);
+    };
+  }, [router]);
+
   const routerProjectId = router.query.projectId as string | undefined;
   const routerOrganizationId = router.query.organizationId as
     | string
@@ -303,7 +320,13 @@ export default function Layout(props: PropsWithChildren) {
             }}
           />
           <SidebarInset className="h-dvh max-w-full md:peer-data-[state=collapsed]:w-[calc(100vw-var(--sidebar-width-icon))] md:peer-data-[state=expanded]:w-[calc(100vw-var(--sidebar-width))]">
-            <main className="h-full">{props.children}</main>
+            <main className="h-full">
+              {isLoading ? (
+                <Spinner message="Loading page..." />
+              ) : (
+                props.children
+              )}
+            </main>
             <Toaster visibleToasts={1} />
             <CommandMenu mainNavigation={navigation} />
           </SidebarInset>

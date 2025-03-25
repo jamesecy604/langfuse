@@ -16,7 +16,6 @@ import useLocalStorage from "@/src/components/useLocalStorage";
 import { CommentDrawerButton } from "@/src/features/comments/CommentDrawerButton";
 import { api } from "@/src/utils/api";
 import { NewDatasetItemFromExistingObject } from "@/src/features/datasets/components/NewDatasetItemFromExistingObject";
-import { CreateNewAnnotationQueueItem } from "@/src/ee/features/annotation-queues/components/CreateNewAnnotationQueueItem";
 import { useHasEntitlement } from "@/src/features/entitlements/hooks";
 import { useMemo, useState } from "react";
 import { usdFormatter } from "@/src/utils/numbers";
@@ -123,13 +122,6 @@ export const TracePreview = ({
                     setEmptySelectedConfigIds={setEmptySelectedConfigIds}
                     hasGroupedButton={hasEntitlement}
                   />
-                  {hasEntitlement && (
-                    <CreateNewAnnotationQueueItem
-                      projectId={trace.projectId}
-                      objectId={trace.id}
-                      objectType={AnnotationQueueObjectType.TRACE}
-                    />
-                  )}
                 </div>
                 <CommentDrawerButton
                   projectId={trace.projectId}
