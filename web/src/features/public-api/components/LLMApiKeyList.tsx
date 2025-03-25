@@ -36,9 +36,9 @@ export function LlmApiKeyList(props: { projectId: string }) {
 
   // only show if the user has access to features that require LLM API keys
   const entitlements = useEntitlements();
-  const isAvailable =
-    entitlements.includes("playground") ||
-    entitlements.includes("model-based-evaluations");
+  const isAvailable = true;
+  // entitlements.includes("playground") ||
+  // entitlements.includes("model-based-evaluations");
 
   const apiKeys = api.llmApiKey.all.useQuery(
     {

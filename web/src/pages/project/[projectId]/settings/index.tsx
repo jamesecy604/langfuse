@@ -43,9 +43,9 @@ export function useProjectSettingsPages(): ProjectSettingsPage[] {
   const showRetentionSettings = useHasEntitlement("data-retention");
 
   const entitlements = useEntitlements();
-  const showLLMConnectionsSettings =
-    entitlements.includes("playground") ||
-    entitlements.includes("model-based-evaluations");
+  const showLLMConnectionsSettings = true;
+  // entitlements.includes("playground") ||
+  // entitlements.includes("model-based-evaluations");
 
   if (!project || !organization || !router.query.projectId) {
     return [];
@@ -111,16 +111,16 @@ export const getProjectSettingsPages = ({
       </div>
     ),
   },
-  {
-    title: "Project API Keys",
-    slug: "api-keys",
-    cmdKKeywords: ["auth", "public key", "secret key"],
-    content: (
-      <div className="flex flex-col gap-6">
-        <ApiKeyList projectId={project.id} />
-      </div>
-    ),
-  },
+  // {
+  //   title: "Project API Keys",
+  //   slug: "api-keys",
+  //   cmdKKeywords: ["auth", "public key", "secret key"],
+  //   content: (
+  //     <div className="flex flex-col gap-6">
+  //       <ApiKeyList projectId={project.id} />
+  //     </div>
+  //   ),
+  // },
   {
     title: "My API Keys",
     slug: "user-api-keys",
@@ -158,12 +158,12 @@ export const getProjectSettingsPages = ({
     cmdKKeywords: ["cost", "token"],
     content: <ModelsSettings projectId={project.id} />,
   },
-  {
-    title: "Scores / Evaluation",
-    slug: "scores",
-    cmdKKeywords: ["config"],
-    content: <ScoreConfigSettings projectId={project.id} />,
-  },
+  // {
+  //   title: "Scores / Evaluation",
+  //   slug: "scores",
+  //   cmdKKeywords: ["config"],
+  //   content: <ScoreConfigSettings projectId={project.id} />,
+  // },
   {
     title: "Members",
     slug: "members",
@@ -186,24 +186,24 @@ export const getProjectSettingsPages = ({
       </div>
     ),
   },
-  {
-    title: "Integrations",
-    slug: "integrations",
-    cmdKKeywords: ["posthog"],
-    content: <Integrations projectId={project.id} />,
-  },
-  {
-    title: "Exports",
-    slug: "exports",
-    cmdKKeywords: ["csv", "download", "json", "batch"],
-    content: <BatchExportsSettingsPage projectId={project.id} />,
-  },
-  {
-    title: "Billing",
-    slug: "billing",
-    href: `/organization/${organization.id}/settings/billing`,
-    show: showBillingSettings,
-  },
+  // {
+  //   title: "Integrations",
+  //   slug: "integrations",
+  //   cmdKKeywords: ["posthog"],
+  //   content: <Integrations projectId={project.id} />,
+  // },
+  // {
+  //   title: "Exports",
+  //   slug: "exports",
+  //   cmdKKeywords: ["csv", "download", "json", "batch"],
+  //   content: <BatchExportsSettingsPage projectId={project.id} />,
+  // },
+  // {
+  //   title: "Billing",
+  //   slug: "billing",
+  //   href: `/organization/${organization.id}/settings/billing`,
+  //   show: showBillingSettings,
+  // },
   {
     title: "Organization Settings",
     slug: "organization",
