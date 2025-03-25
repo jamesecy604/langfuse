@@ -24,7 +24,6 @@ import { useDashboardDateRange } from "@/src/hooks/useDashboardDateRange";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import { ScoreAnalytics } from "@/src/features/dashboard/components/score-analytics/ScoreAnalytics";
 import SetupTracingButton from "@/src/features/setup/components/SetupTracingButton";
-import { useUiCustomization } from "@/src/ee/features/ui-customization/useUiCustomization";
 import { useEntitlementLimit } from "@/src/features/entitlements/hooks";
 import Page from "@/src/components/layouts/page";
 import { MultiSelect } from "@/src/features/filters/components/multi-select";
@@ -38,8 +37,6 @@ export default function Dashboard() {
   const projectId = router.query.projectId as string;
   const { selectedOption, dateRange, setDateRangeAndOption } =
     useDashboardDateRange();
-
-  const uiCustomization = useUiCustomization();
 
   const lookbackLimit = useEntitlementLimit("data-access-days");
 
@@ -221,27 +218,6 @@ export default function Dashboard() {
             onChange={useDebounce(setUserFilterState)}
           />
         </div>
-        {uiCustomization?.feedbackHref === undefined && (
-          <FeedbackButtonWrapper
-            title="Request Chart"
-            description="Your feedback matters! Let the Langfuse team know what additional data or metrics you'd like to see in your dashboard."
-            className="hidden lg:flex"
-          >
-            <Button
-              id="date"
-              variant={"outline"}
-              className={
-                "group justify-start gap-x-3 text-left font-semibold text-primary hover:bg-primary-foreground hover:text-primary-accent"
-              }
-            >
-              <BarChart2
-                className="hidden h-6 w-6 shrink-0 text-primary group-hover:text-primary-accent lg:block"
-                aria-hidden="true"
-              />
-              Request Chart
-            </Button>
-          </FeedbackButtonWrapper>
-        )}
       </div>
       <div className="grid w-full grid-cols-1 gap-3 overflow-hidden lg:grid-cols-2 xl:grid-cols-6">
         <TracesBarListChart

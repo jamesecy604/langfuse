@@ -4,7 +4,6 @@
  * If no custom SSO provider is configured or EE is not available, this API will return a 404 response.
  */
 
-import { getSsoAuthProviderIdForDomain } from "@/src/ee/features/multi-tenant-sso/utils";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
@@ -24,11 +23,5 @@ export default async function handler(
     return res.status(400).json({ message: "Invalid request body" });
   }
 
-  const providerId = await getSsoAuthProviderIdForDomain(validBody.data.domain);
-
-  if (!providerId) {
-    return res.status(404).json({ message: "No SSO provider configured" });
-  }
-
-  return res.status(200).json({ providerId });
+  return res.status(200).json("");
 }

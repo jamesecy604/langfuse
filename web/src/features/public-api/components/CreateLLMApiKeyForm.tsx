@@ -29,7 +29,6 @@ import { Switch } from "@/src/components/ui/switch";
 import { api } from "@/src/utils/api";
 import { cn } from "@/src/utils/tailwind";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
-import { type useUiCustomization } from "@/src/ee/features/ui-customization/useUiCustomization";
 
 const formSchema = z
   .object({
@@ -70,11 +69,10 @@ const formSchema = z
 export function CreateLLMApiKeyForm({
   projectId,
   onSuccess,
-  customization,
+  //customization,
 }: {
   projectId?: string;
   onSuccess: () => void;
-  customization: ReturnType<typeof useUiCustomization>;
 }) {
   const utils = api.useUtils();
   const capture = usePostHogClientCapture();
@@ -92,22 +90,20 @@ export function CreateLLMApiKeyForm({
 
   const mutTestLLMApiKey = api.llmApiKey.test.useMutation();
 
-  const defaultAdapter: LLMAdapter = customization?.defaultModelAdapter
-    ? LLMAdapter[customization.defaultModelAdapter]
-    : LLMAdapter.OpenAI;
+  const defaultAdapter: LLMAdapter = LLMAdapter.OpenAI;
 
-  const getCustomizedBaseURL = (adapter: LLMAdapter) => {
-    switch (adapter) {
-      case LLMAdapter.OpenAI:
-        return customization?.defaultBaseUrlOpenAI ?? "";
-      case LLMAdapter.Azure:
-        return customization?.defaultBaseUrlAzure ?? "";
-      case LLMAdapter.Anthropic:
-        return customization?.defaultBaseUrlAnthropic ?? "";
-      default:
-        return "";
-    }
-  };
+  // const getCustomizedBaseURL = (adapter: LLMAdapter) => {
+  //   switch (adapter) {
+  //     case LLMAdapter.OpenAI:
+  //       return customization?.defaultBaseUrlOpenAI ?? "";
+  //     case LLMAdapter.Azure:
+  //       return customization?.defaultBaseUrlAzure ?? "";
+  //     case LLMAdapter.Anthropic:
+  //       return customization?.defaultBaseUrlAnthropic ?? "";
+  //     default:
+  //       return "";
+  //   }
+  // };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -115,7 +111,7 @@ export function CreateLLMApiKeyForm({
       adapter: defaultAdapter,
       provider: "",
       secretKey: "",
-      baseURL: getCustomizedBaseURL(defaultAdapter),
+      //baseURL: getCustomizedBaseURL(defaultAdapter),
       withDefaultModels: true,
       customModels: [],
       extraHeaders: [],
@@ -259,10 +255,10 @@ export function CreateLLMApiKeyForm({
                 defaultValue={field.value}
                 onValueChange={(value) => {
                   field.onChange(value as LLMAdapter);
-                  form.setValue(
-                    "baseURL",
-                    getCustomizedBaseURL(value as LLMAdapter),
-                  );
+                  // form.setValue(
+                  //   "baseURL",
+                  //   getCustomizedBaseURL(value as LLMAdapter),
+                  // );
                 }}
               >
                 <FormControl>

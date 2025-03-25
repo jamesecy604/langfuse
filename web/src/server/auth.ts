@@ -31,10 +31,6 @@ import KeycloakProvider from "next-auth/providers/keycloak";
 import WorkOSProvider from "next-auth/providers/workos";
 import { type Provider } from "next-auth/providers/index";
 import { getCookieName, getCookieOptions } from "./utils/cookies";
-import {
-  getSsoAuthProviderIdForDomain,
-  loadSsoProviders,
-} from "@/src/ee/features/multi-tenant-sso/utils";
 import { z } from "zod";
 import { CloudConfigSchema } from "@langfuse/shared";
 import {
@@ -45,27 +41,14 @@ import {
   instrumentAsync,
   logger,
 } from "@langfuse/shared/src/server";
-import {
-  getOrganizationPlanServerSide,
-  getSelfHostedInstancePlanServerSide,
-} from "@/src/features/entitlements/server/getPlan";
+import { getOrganizationPlanServerSide } from "@/src/features/entitlements/server/getPlan";
 import { projectRoleAccessRights } from "@/src/features/rbac/constants/projectAccessRights";
 import { hasEntitlementBasedOnPlan } from "@/src/features/entitlements/server/hasEntitlement";
 import { getSSOBlockedDomains } from "@/src/features/auth-credentials/server/signupApiHandler";
 
 function canCreateOrganizations(userEmail: string | null): boolean {
-  const instancePlan = getSelfHostedInstancePlanServerSide();
-
-  // if no allowlist is set or no entitlement for self-host-allowed-organization-creators, allow all users to create organizations
-  if (
-    !env.LANGFUSE_ALLOWED_ORGANIZATION_CREATORS ||
-    !hasEntitlementBasedOnPlan({
-      plan: instancePlan,
-      entitlement: "self-host-allowed-organization-creators",
-    })
-  )
-    return true;
-
+  // If no allowlist is set, allow all users to create organizations
+  if (!env.LANGFUSE_ALLOWED_ORGANIZATION_CREATORS) return true;
   if (!userEmail) return false;
 
   const allowedOrgCreators =
@@ -119,13 +102,6 @@ const staticProviders: Provider[] = [
         throw new Error(
           "Sign in with email and password is disabled for this domain. Please use SSO.",
         );
-      }
-
-      // EE: Check custom SSO enforcement
-      const multiTenantSsoProvider =
-        await getSsoAuthProviderIdForDomain(domain);
-      if (multiTenantSsoProvider) {
-        throw new Error(`You must sign in via SSO for this domain.`);
       }
 
       const dbUser = await prisma.user.findUnique({
@@ -440,14 +416,7 @@ const extendedPrismaAdapter: Adapter = {
  * @see https://next-auth.js.org/configuration/options
  */
 export async function getAuthOptions(): Promise<NextAuthOptions> {
-  let dynamicSsoProviders: Provider[] = [];
-  try {
-    dynamicSsoProviders = await loadSsoProviders();
-  } catch (e) {
-    logger.error("Error loading dynamic SSO providers", e);
-    traceException(e);
-  }
-  const providers = [...staticProviders, ...dynamicSsoProviders];
+  const providers = [...staticProviders];
 
   const data: NextAuthOptions = {
     session: {
@@ -494,9 +463,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 env.LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES === "true",
               disableExpensivePostgresQueries:
                 env.LANGFUSE_DISABLE_EXPENSIVE_POSTGRES_QUERIES === "true",
-              // Enables features that are only available under an enterprise license when self-hosting Langfuse
-              // If you edit this line, you risk executing code that is not MIT licensed (self-contained in /ee folders otherwise)
-              selfHostedInstancePlan: getSelfHostedInstancePlanServerSide(),
+              selfHostedInstancePlan: "oss", // Default to open source version unless self-hosted
             },
             user:
               dbUser !== null
@@ -568,21 +535,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           if (z.string().email().safeParse(email).success === false) {
             logger.error("Invalid email found in user object");
             throw new Error("Invalid email found in user object");
-          }
-
-          // EE: Check custom SSO enforcement, enforce the specific SSO provider on email domain
-          // This also blocks setting a password for an email that is enforced to use SSO via password reset flow
-          const domain = email.split("@")[1];
-          const multiTenantSsoProvider =
-            await getSsoAuthProviderIdForDomain(domain);
-          if (
-            multiTenantSsoProvider &&
-            account?.provider !== multiTenantSsoProvider
-          ) {
-            console.log(
-              "Custom SSO provider enforced for domain, user signed in with other provider",
-            );
-            throw new Error(`You must sign in via SSO for this domain.`);
           }
 
           // Only allow sign in via email link if user is already in db as this is used for password reset

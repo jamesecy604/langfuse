@@ -18,10 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
-import {
-  type UiCustomizationOption,
-  useUiCustomization,
-} from "@/src/ee/features/ui-customization/useUiCustomization";
+
 import { SidebarMenuButton, useSidebar } from "@/src/components/ui/sidebar";
 import {
   chatAvailable,
@@ -37,12 +34,9 @@ type SupportMenuItem = {
   pathname: string;
   icon: LucideIcon | React.ElementType;
   menuNode?: ReactNode;
-  customizableHref?: UiCustomizationOption;
 };
 
 export const SupportMenuDropdown = () => {
-  const uiCustomization = useUiCustomization();
-
   const supportMenuItems: (SupportMenuItem | "separator")[] = useMemo(() => {
     const items: (SupportMenuItem | "separator")[] = [
       {
@@ -53,85 +47,13 @@ export const SupportMenuDropdown = () => {
     ];
 
     const chatVisible = chatIsVisible();
-    if (uiCustomization?.supportHref) {
-      items.push({
-        title: "Support",
-        pathname: uiCustomization.supportHref,
-        icon: LifeBuoy,
-      });
-    } else {
-      if (chatAvailable) {
-        items.push({
-          title: "Chat",
-          pathname: "#",
-          menuNode: (
-            <div className="flex items-center gap-2">
-              <MessageCircle className="h-4 w-4" />
-              <span>Chat</span>
-              <Switch
-                defaultChecked={chatVisible}
-                onClick={(e) => e.stopPropagation()}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    showChat();
-                  } else {
-                    hideChat();
-                  }
-                }}
-                className="ml-auto"
-              />
-            </div>
-          ),
-          icon: MessageCircle,
-        });
-      }
-      items.push("separator");
-      items.push({
-        title: "GitHub Support",
-        pathname: "https://langfuse.com/gh-support",
-        icon: Github,
-      });
-      items.push({
-        title: "Discord",
-        pathname: "https://langfuse.com/discord",
-        icon: SiDiscord,
-      });
-    }
 
     items.push("separator");
-    items.push({
-      title: "Docs",
-      pathname: "https://langfuse.com/docs",
-      icon: LibraryBig,
-      customizableHref: "documentationHref",
-    });
-    items.push("separator");
 
-    if (uiCustomization?.feedbackHref) {
-      items.push({
-        title: "Feedback",
-        pathname: uiCustomization.feedbackHref,
-        icon: MessageSquarePlus,
-      });
-    } else {
-      items.push(
-        ...[
-          {
-            title: "Feature Request",
-            pathname: "https://langfuse.com/ideas",
-            icon: Lightbulb,
-          },
-          {
-            title: "Report a Bug",
-            pathname: "https://langfuse.com/issues",
-            icon: Bug,
-          },
-        ],
-      );
-    }
+    items.push("separator");
 
     return items;
-  }, [uiCustomization]);
+  }, []);
 
   const { isMobile } = useSidebar();
 
@@ -152,9 +74,7 @@ export const SupportMenuDropdown = () => {
           if (item === "separator") {
             return <DropdownMenuSeparator key={`separator-${index}`} />;
           }
-          const url = item.customizableHref
-            ? (uiCustomization?.[item.customizableHref] ?? item.pathname)
-            : item.pathname;
+          const url = item.pathname;
           return (
             <DropdownMenuItem key={item.title} asChild>
               {item.menuNode ?? (

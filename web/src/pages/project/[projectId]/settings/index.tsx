@@ -25,7 +25,6 @@ import { useRouter } from "next/router";
 import { SettingsDangerZone } from "@/src/components/SettingsDangerZone";
 import { ActionButton } from "@/src/components/ActionButton";
 import { BatchExportsSettingsPage } from "@/src/features/batch-exports/components/BatchExportsSettingsPage";
-import { AuditLogsSettingsPage } from "@/src/ee/features/audit-log-viewer/AuditLogsSettingsPage";
 import { ModelsSettings } from "@/src/features/models/components/ModelSettings";
 import ConfigureRetention from "@/src/features/projects/components/ConfigureRetention";
 import ContainerPage from "@/src/components/layouts/container-page";
@@ -198,12 +197,6 @@ export const getProjectSettingsPages = ({
     slug: "exports",
     cmdKKeywords: ["csv", "download", "json", "batch"],
     content: <BatchExportsSettingsPage projectId={project.id} />,
-  },
-  {
-    title: "Audit Logs",
-    slug: "audit-logs",
-    cmdKKeywords: ["trail"],
-    content: <AuditLogsSettingsPage projectId={project.id} />,
   },
   {
     title: "Billing",

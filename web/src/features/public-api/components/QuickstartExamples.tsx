@@ -5,7 +5,7 @@ import {
   TabsContent,
   TabsTrigger,
 } from "@/src/components/ui/tabs";
-import { useUiCustomization } from "@/src/ee/features/ui-customization/useUiCustomization";
+
 import { env } from "@/src/env.mjs";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
 import Link from "next/link";
@@ -17,7 +17,6 @@ export const QuickstartExamples = ({
   secretKey: string;
   publicKey: string;
 }) => {
-  const uiCustomization = useUiCustomization();
   const capture = usePostHogClientCapture();
   const tabs = [
     { value: "python", label: "Python" },
@@ -28,24 +27,24 @@ export const QuickstartExamples = ({
     { value: "llamaindex", label: "LlamaIndex" },
     { value: "other", label: "Other" },
   ];
-  const host = `${uiCustomization?.hostname ?? window.origin}${env.NEXT_PUBLIC_BASE_PATH ?? ""}`;
+  // const host = `${uiCustomization?.hostname ?? window.origin}${env.NEXT_PUBLIC_BASE_PATH ?? ""}`;
 
-  // if custom docs link, do not show quickstart examples but refer to docs
-  if (uiCustomization?.documentationHref) {
-    return (
-      <p className="mb-2">
-        See your{" "}
-        <Link
-          href={uiCustomization.documentationHref}
-          target="_blank"
-          className="underline"
-        >
-          internal documentation
-        </Link>{" "}
-        for details on how to set up Langfuse in your organization.
-      </p>
-    );
-  }
+  // // if custom docs link, do not show quickstart examples but refer to docs
+  // if (uiCustomization?.documentationHref) {
+  //   return (
+  //     <p className="mb-2">
+  //       See your{" "}
+  //       <Link
+  //         href={uiCustomization.documentationHref}
+  //         target="_blank"
+  //         className="underline"
+  //       >
+  //         internal documentation
+  //       </Link>{" "}
+  //       for details on how to set up Langfuse in your organization.
+  //     </p>
+  //   );
+  // }
 
   return (
     <div>
@@ -68,10 +67,6 @@ export const QuickstartExamples = ({
           </TabsList>
         </div>
         <TabsContent value="python">
-          <CodeView content="pip install langfuse" className="mb-2" />
-          <CodeView
-            content={`from langfuse import Langfuse\n\nlangfuse = Langfuse(\n  secret_key="${secretKey}",\n  public_key="${publicKey}",\n  host="${host}"\n)`}
-          />
           <p className="mt-3 text-xs text-muted-foreground">
             See{" "}
             <a
@@ -95,10 +90,6 @@ export const QuickstartExamples = ({
           </p>
         </TabsContent>
         <TabsContent value="js">
-          <CodeView content="npm install langfuse" className="mb-2" />
-          <CodeView
-            content={`import { Langfuse } from "langfuse";\n\nconst langfuse = new Langfuse({\n  secretKey: "${secretKey}",\n  publicKey: "${publicKey}",\n  baseUrl: "${host}"\n});`}
-          />
           <p className="mt-3 text-xs text-muted-foreground">
             See{" "}
             <a
@@ -128,11 +119,7 @@ export const QuickstartExamples = ({
             them to Langfuse asynchronously.
           </p>
           <CodeView content="pip install langfuse" className="my-2" />
-          <CodeView
-            title=".env"
-            content={`LANGFUSE_SECRET_KEY=${secretKey}\nLANGFUSE_PUBLIC_KEY=${publicKey}\nLANGFUSE_HOST="${host}"`}
-            className="my-2"
-          />
+
           <CodeView
             content={`# remove: import openai\n\nfrom langfuse.openai import openai`}
             className="my-2"
@@ -156,10 +143,7 @@ export const QuickstartExamples = ({
             capture detailed traces of your Langchain executions.
           </p>
           <CodeView content="pip install langfuse" className="my-2" />
-          <CodeView
-            content={LANGCHAIN_PYTHON_CODE({ publicKey, secretKey, host })}
-            className="my-2"
-          />
+
           <p className="mt-2 text-xs text-muted-foreground">
             See the{" "}
             <a
@@ -179,10 +163,7 @@ export const QuickstartExamples = ({
             capture detailed traces of your Langchain executions.
           </p>
           <CodeView content="npm install langfuse-langchain" className="my-2" />
-          <CodeView
-            content={LANGCHAIN_JS_CODE({ publicKey, secretKey, host })}
-            className="my-2"
-          />
+
           <p className="mt-2 text-xs text-muted-foreground">
             See the{" "}
             <a
@@ -205,10 +186,7 @@ export const QuickstartExamples = ({
             content="pip install langfuse llama-index"
             className="my-2"
           />
-          <CodeView
-            content={LLAMA_INDEX_CODE({ publicKey, secretKey, host })}
-            className="my-2"
-          />
+
           <p className="mt-2 text-xs text-muted-foreground">
             See the{" "}
             <a

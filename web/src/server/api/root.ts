@@ -9,12 +9,12 @@ import { userApiKeysRouter } from "@/src/features/public-api/server/userApiKeyRo
 import { membersRouter } from "@/src/features/rbac/server/membersRouter";
 import { userRouter } from "@/src/server/api/routers/users";
 import { datasetRouter } from "@/src/features/datasets/server/dataset-router";
-import { cloudBillingRouter } from "@/src/ee/features/billing/server/cloudBillingRouter";
+
 import { observationsRouter } from "@/src/server/api/routers/observations";
 import { sessionRouter } from "@/src/server/api/routers/sessions";
 import { promptRouter } from "@/src/features/prompts/server/routers/promptRouter";
 import { modelRouter } from "@/src/server/api/routers/models";
-import { evalRouter } from "@/src/ee/features/evals/server/router";
+
 import { posthogIntegrationRouter } from "@/src/features/posthog-integration/posthog-integration-router";
 import { llmApiKeyRouter } from "@/src/features/llm-api-key/server/router";
 import { organizationsRouter } from "@/src/features/organizations/server/organizationRouter";
@@ -23,11 +23,7 @@ import { publicRouter } from "@/src/server/api/routers/public";
 import { credentialsRouter } from "@/src/features/auth-credentials/server/credentialsRouter";
 import { batchExportRouter } from "@/src/features/batch-exports/server/batchExport";
 import { utilsRouter } from "@/src/server/api/routers/utilities";
-import { uiCustomizationRouter } from "@/src/ee/features/ui-customization/uiCustomizationRouter";
 import { commentsRouter } from "@/src/server/api/routers/comments";
-import { queueRouter } from "@/src/ee/features/annotation-queues/server/annotationQueues";
-import { queueItemRouter } from "@/src/ee/features/annotation-queues/server/annotationQueueItems";
-import { experimentsRouter } from "@/src/ee/features/experiments/server/router";
 import { mediaRouter } from "@/src/server/api/routers/media";
 import { backgroundMigrationsRouter } from "@/src/features/background-migrations/server/background-migrations-router";
 import { auditLogsRouter } from "./routers/auditLogs";
@@ -39,8 +35,6 @@ import { tableRouter } from "@/src/features/table/server/tableRouter";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  annotationQueues: queueRouter,
-  annotationQueueItems: queueItemRouter,
   batchExport: batchExportRouter,
   traces: traceRouter,
   sessions: sessionRouter,
@@ -55,18 +49,14 @@ export const appRouter = createTRPCRouter({
   userApiKeys: userApiKeysRouter,
   members: membersRouter,
   datasets: datasetRouter,
-  cloudBilling: cloudBillingRouter,
   observations: observationsRouter,
   prompts: promptRouter,
   models: modelRouter,
-  evals: evalRouter,
-  experiments: experimentsRouter,
   posthogIntegration: posthogIntegrationRouter,
   llmApiKey: llmApiKeyRouter,
   public: publicRouter,
   credentials: credentialsRouter,
   utilities: utilsRouter,
-  uiCustomization: uiCustomizationRouter,
   comments: commentsRouter,
   media: mediaRouter,
   backgroundMigrations: backgroundMigrationsRouter,
