@@ -12,7 +12,7 @@ import {
   TQueueJobTypes,
 } from "@langfuse/shared/src/server";
 import { prisma } from "@langfuse/shared/src/db";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@langfuse/shared/src/db";
 import { env } from "../env";
 
 let s3MediaStorageClient: StorageService;

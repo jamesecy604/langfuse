@@ -1,6 +1,6 @@
 import { Redis } from "ioredis";
 import { v4 } from "uuid";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@langfuse/shared";
 
 import {
   LangfuseNotFoundError,

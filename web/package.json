@@ -125,6 +125,7 @@
     "next-auth": "^4.24.11",
     "next-query-params": "^5.0.1",
     "next-themes": "^0.3.0",
+    "openai": "^4.89.0",
     "posthog-js": "^1.176.0",
     "posthog-node": "^4.3.1",
     "prexit": "^2.2.0",
