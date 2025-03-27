@@ -140,7 +140,13 @@ export class BalanceService implements IBalanceService {
   async getCurrentBalance(userId: string) {
     try {
       // Get from Redis cache first
-      return await this.balanceRepository.getRedisBalance(userId);
+      const balance = await this.balanceRepository.getRedisBalance(userId);
+      if (balance === null) {
+        // Redis data expired or missing, reinitialize from ClickHouse
+        await this.initBalance(userId);
+        return await this.balanceRepository.getRedisBalance(userId);
+      }
+      return balance;
     } catch (error) {
       logger.error("Failed to get balance", { userId, error });
       throw error;
@@ -150,7 +156,14 @@ export class BalanceService implements IBalanceService {
   async getBalanceDetails(userId: string) {
     try {
       // Get all details from Redis
-      return await this.balanceRepository.getRedisBalanceDetails(userId);
+      const details =
+        await this.balanceRepository.getRedisBalanceDetails(userId);
+      if (details === null) {
+        // Redis data expired or missing, reinitialize from ClickHouse
+        await this.initBalance(userId);
+        return await this.balanceRepository.getRedisBalanceDetails(userId);
+      }
+      return details;
     } catch (error) {
       logger.error("Failed to get balance details", { userId, error });
       throw error;

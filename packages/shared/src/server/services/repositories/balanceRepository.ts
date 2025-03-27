@@ -77,12 +77,17 @@ export class BalanceRepository {
     totalUsage: number,
   ) {
     const key = `${BALANCE_KEY_PREFIX}${userId}`;
-    await this.getRedis().hmset(key, {
-      [BALANCE_DETAILS.CURRENT]: currentBalance.toString(),
-      [BALANCE_DETAILS.TOTAL_TOPUPS]: totalTopups.toString(),
-      [BALANCE_DETAILS.TOTAL_USAGE]: totalUsage.toString(),
-      [BALANCE_DETAILS.UPDATED_AT]: Date.now().toString(),
-    });
+    const redis = this.getRedis();
+    await redis
+      .multi()
+      .hmset(key, {
+        [BALANCE_DETAILS.CURRENT]: currentBalance.toString(),
+        [BALANCE_DETAILS.TOTAL_TOPUPS]: totalTopups.toString(),
+        [BALANCE_DETAILS.TOTAL_USAGE]: totalUsage.toString(),
+        [BALANCE_DETAILS.UPDATED_AT]: Date.now().toString(),
+      })
+      .expire(key, Number(process.env.REDIS_BALANCE_TTL_SECONDS) || 120)
+      .exec();
   }
 
   async updateRedisBalance(
@@ -109,6 +114,7 @@ export class BalanceRepository {
     // Update timestamp
     multi.hset(key, BALANCE_DETAILS.UPDATED_AT, Date.now().toString());
 
+    multi.expire(key, Number(process.env.REDIS_BALANCE_TTL_SECONDS) || 120);
     await multi.exec();
     const balance = await this.getRedis().hget(key, BALANCE_DETAILS.CURRENT);
     console.log("=========================Current balance:", balance);
