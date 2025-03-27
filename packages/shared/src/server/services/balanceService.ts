@@ -27,8 +27,8 @@ export interface IBalanceService {
     type: "CREDIT" | "DEBIT",
     description: string,
   ): Promise<boolean>;
-  getCurrentBalance(userId: string): Promise<number>;
-  getBalanceDetails(userId: string): Promise<BalanceDetails>;
+  getCurrentBalance(userId: string): Promise<number | null>;
+  getBalanceDetails(userId: string): Promise<BalanceDetails | null>;
   batchUpdate(
     transactions: Array<{
       userId: string;
@@ -47,16 +47,27 @@ export class BalanceService implements IBalanceService {
 
   async initBalance(userId: string) {
     try {
+      console.log(`[BalanceService] Initializing balance for user ${userId}`);
       // Fetch initial balance from ClickHouse
       const details = await this.balanceRepository.getBalanceDetails(userId);
+      console.log(
+        `[BalanceService] ClickHouse balance details:`,
+        JSON.stringify(details),
+      );
 
       // Initialize Redis with the current balance
+      console.log(`[BalanceService] Initializing Redis balance with values:`, {
+        current: details.current,
+        totalTopups: details.totalTopups,
+        totalUsage: details.totalUsage,
+      });
       await this.balanceRepository.initRedisBalance(
         userId,
         details.current,
         details.totalTopups,
         details.totalUsage,
       );
+      console.log(`[BalanceService] Redis balance initialized successfully`);
     } catch (error) {
       logger.error("Failed to initialize balance", { userId, error });
       throw error;
@@ -84,7 +95,7 @@ export class BalanceService implements IBalanceService {
     amount: number,
     type: "CREDIT" | "DEBIT",
     description: string,
-  ) {
+  ): Promise<boolean> {
     console.log(
       `[BalanceService] updateBalance called for user ${userId}, amount ${amount}, type ${type}`,
     );
@@ -97,26 +108,46 @@ export class BalanceService implements IBalanceService {
     console.log(`[BalanceService] Created transaction:`, transaction);
 
     try {
-      // Update Redis first
-      console.log(`[BalanceService] Updating Redis balance...`);
-      await this.balanceRepository.updateRedisBalance(userId, amount, type);
-      console.log(`[BalanceService] Redis balance updated successfully`);
+      // Check if Redis balance exists first
+      const currentBalance =
+        await this.balanceRepository.getRedisBalance(userId);
+      if (currentBalance === null) {
+        console.log(
+          `[BalanceService] Redis balance missing/expired, initializing from DB`,
+        );
+        await this.initBalance(userId);
+      }
 
-      // Queue async update to ClickHouse
+      // Update Redis and get new balance
+      console.log(`[BalanceService] Updating Redis balance...`);
+      const newBalance = await this.balanceRepository.updateRedisBalance(
+        userId,
+        amount,
+        type,
+      );
+
+      if (newBalance === null) {
+        logger.error("Redis balance update failed - returned null", {
+          userId,
+          amount,
+          type,
+          description,
+        });
+        return false;
+      }
+
+      // Only queue ClickHouse update after successful Redis update
       console.log(
         `[BalanceService] Getting queue ${QueueName.BalanceTransactionQueue}...`,
       );
       const queue = await getQueue(QueueName.BalanceTransactionQueue);
       if (queue) {
-        console.log(`[BalanceService] Queue found, adding job...`);
         const jobData = {
           ...transaction,
           timestamp: new Date(),
           id: `${userId}-${Date.now()}`,
         };
-        console.log(`[BalanceService] Adding job to queue with data:`, jobData);
         await queue.add(QueueJobs.BalanceTransactionJob, jobData);
-        console.log(`[BalanceService] Job added to queue:`, jobData);
       } else {
         console.error(
           `[BalanceService] Queue ${QueueName.BalanceTransactionQueue} not found`,
@@ -125,15 +156,14 @@ export class BalanceService implements IBalanceService {
 
       return true;
     } catch (error) {
-      console.error(`[BalanceService] Failed to update balance:`, error);
       logger.error("Failed to update balance", {
         userId,
         amount,
         type,
         description,
-        error,
+        error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      return false;
     }
   }
 
@@ -141,10 +171,12 @@ export class BalanceService implements IBalanceService {
     try {
       // Get from Redis cache first
       const balance = await this.balanceRepository.getRedisBalance(userId);
+
       if (balance === null) {
         // Redis data expired or missing, reinitialize from ClickHouse
         await this.initBalance(userId);
-        return await this.balanceRepository.getRedisBalance(userId);
+        const newBalance = await this.balanceRepository.getRedisBalance(userId);
+        return newBalance;
       }
       return balance;
     } catch (error) {
@@ -158,10 +190,14 @@ export class BalanceService implements IBalanceService {
       // Get all details from Redis
       const details =
         await this.balanceRepository.getRedisBalanceDetails(userId);
+
       if (details === null) {
         // Redis data expired or missing, reinitialize from ClickHouse
         await this.initBalance(userId);
-        return await this.balanceRepository.getRedisBalanceDetails(userId);
+        const newDetails =
+          await this.balanceRepository.getRedisBalanceDetails(userId);
+
+        return newDetails;
       }
       return details;
     } catch (error) {

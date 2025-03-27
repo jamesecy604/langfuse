@@ -96,50 +96,127 @@ export class BalanceRepository {
     type: "CREDIT" | "DEBIT",
   ) {
     const key = `${BALANCE_KEY_PREFIX}${userId}`;
-    const multi = this.getRedis().multi();
+    const redis = this.getRedis();
+    const ttl = Number(process.env.REDIS_BALANCE_TTL_SECONDS) || 120;
 
-    // Convert amount for DEBIT transactions (negative amount should subtract)
-    const adjustedAmount = type === "DEBIT" ? -amount : Math.abs(amount);
+    // Retry with exponential backoff for concurrent modifications
+    const maxAttempts = 5;
+    const baseDelayMs = 100;
 
-    // Update current balance
-    multi.hincrbyfloat(key, BALANCE_DETAILS.CURRENT, adjustedAmount);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await redis.watch(key);
 
-    // Update totals based on transaction type
-    if (type === "CREDIT") {
-      multi.hincrbyfloat(key, BALANCE_DETAILS.TOTAL_TOPUPS, amount);
-    } else {
-      multi.hincrbyfloat(key, BALANCE_DETAILS.TOTAL_USAGE, Math.abs(amount));
+        // Get all balance fields atomically
+        const [currentBalance, totalTopups, totalUsage] = await redis.hmget(
+          key,
+          BALANCE_DETAILS.CURRENT,
+          BALANCE_DETAILS.TOTAL_TOPUPS,
+          BALANCE_DETAILS.TOTAL_USAGE,
+        );
+
+        const initialBalance = currentBalance ? parseFloat(currentBalance) : 0;
+        const initialTopups = totalTopups ? parseFloat(totalTopups) : 0;
+        const initialUsage = totalUsage ? parseFloat(totalUsage) : 0;
+
+        // Calculate new values
+        const newBalance =
+          type === "CREDIT"
+            ? initialBalance + Math.abs(amount)
+            : initialBalance - Math.abs(amount);
+
+        const newTopups =
+          type === "CREDIT" ? initialTopups + Math.abs(amount) : initialTopups;
+
+        const newUsage =
+          type === "DEBIT" ? initialUsage + Math.abs(amount) : initialUsage;
+
+        // Start transaction
+        const multi = redis.multi();
+        multi.hmset(key, {
+          [BALANCE_DETAILS.CURRENT]: newBalance.toString(),
+          [BALANCE_DETAILS.TOTAL_TOPUPS]: newTopups.toString(),
+          [BALANCE_DETAILS.TOTAL_USAGE]: newUsage.toString(),
+          [BALANCE_DETAILS.UPDATED_AT]: Date.now().toString(),
+        });
+        multi.expire(key, ttl);
+
+        // Execute transaction
+        const result = await multi.exec();
+        if (result === null) {
+          // Transaction failed due to concurrent modification
+          const delayMs = baseDelayMs * Math.pow(2, attempt);
+          logger.warn(
+            `Balance update conflict (attempt ${attempt + 1}), retrying in ${delayMs}ms`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        logger.info(
+          `Balance updated successfully after ${attempt + 1} attempts`,
+          {
+            userId,
+            newBalance,
+            type,
+            amount,
+          },
+        );
+        return newBalance;
+      } catch (error) {
+        logger.error("Balance update error", {
+          error,
+          userId,
+          attempt,
+          amount,
+          type,
+        });
+        await redis.unwatch();
+        throw error;
+      }
     }
 
-    // Update timestamp
-    multi.hset(key, BALANCE_DETAILS.UPDATED_AT, Date.now().toString());
-
-    multi.expire(key, Number(process.env.REDIS_BALANCE_TTL_SECONDS) || 120);
-    await multi.exec();
-    const balance = await this.getRedis().hget(key, BALANCE_DETAILS.CURRENT);
-    console.log("=========================Current balance:", balance);
+    logger.error(
+      `Failed to update balance after ${maxAttempts} attempts due to concurrent modifications`,
+      { userId, amount, type },
+    );
+    return null;
   }
 
-  async getRedisBalance(userId: string) {
+  async getRedisBalance(userId: string): Promise<number | null> {
     const key = `${BALANCE_KEY_PREFIX}${userId}`;
-    const balance = await this.getRedis().hget(key, BALANCE_DETAILS.CURRENT);
-    if (balance !== null && balance.toString() !== "0") {
-      return parseFloat(balance);
+    const redis = this.getRedis();
+
+    // Check if key exists and hasn't expired
+    const exists = await redis.exists(key);
+    if (!exists) {
+      return null;
     }
 
-    // Fall back to Clickhouse if Redis has no balance
-    const { current, totalTopups, totalUsage } =
-      await this.getBalanceDetails(userId);
+    const balance = await redis.hget(key, BALANCE_DETAILS.CURRENT);
+    if (balance === null) {
+      return null;
+    }
 
-    // Update Redis with the latest balance from Clickhouse
-    await this.initRedisBalance(userId, current, totalTopups, totalUsage);
-
-    return current;
+    return parseFloat(balance);
   }
 
-  async getRedisBalanceDetails(userId: string) {
+  async getRedisBalanceDetails(userId: string): Promise<{
+    current: number;
+    totalTopups: number;
+    totalUsage: number;
+    updatedAt: Date | null;
+  } | null> {
     const key = `${BALANCE_KEY_PREFIX}${userId}`;
-    const result = await this.getRedis().hmget(
+    const redis = this.getRedis();
+
+    // Check if key exists and hasn't expired
+    const exists = await redis.exists(key);
+    if (!exists) {
+      return null;
+    }
+
+    const result = await redis.hmget(
       key,
       BALANCE_DETAILS.CURRENT,
       BALANCE_DETAILS.TOTAL_TOPUPS,
@@ -147,10 +224,18 @@ export class BalanceRepository {
       BALANCE_DETAILS.UPDATED_AT,
     );
 
+    // If any field is null, consider the entire balance null
+    if (result.some((val) => val === null)) {
+      return null;
+    }
+
+    if (!result[0] || !result[1] || !result[2]) {
+      throw new Error("Invalid balance data from Redis");
+    }
     return {
-      current: parseFloat(result[0] || "0"),
-      totalTopups: parseFloat(result[1] || "0"),
-      totalUsage: parseFloat(result[2] || "0"),
+      current: parseFloat(result[0]),
+      totalTopups: parseFloat(result[1]),
+      totalUsage: parseFloat(result[2]),
       updatedAt: result[3] ? new Date(parseInt(result[3])) : null,
     };
   }
@@ -162,29 +247,97 @@ export class BalanceRepository {
       type: "CREDIT" | "DEBIT";
     }>,
   ) {
-    const multi = this.getRedis().multi();
+    const redis = this.getRedis();
+    const ttl = Number(process.env.REDIS_BALANCE_TTL_SECONDS) || 120;
+    const maxAttempts = 5;
+    const baseDelayMs = 100;
 
-    for (const { userId, amount, type } of transactions) {
-      const key = `${BALANCE_KEY_PREFIX}${userId}`;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        // Watch all keys first
+        const keys = transactions.map(
+          (t) => `${BALANCE_KEY_PREFIX}${t.userId}`,
+        );
+        await redis.watch(...keys);
 
-      // Convert amount for DEBIT transactions (negative amount should subtract)
-      const adjustedAmount = type === "DEBIT" ? Math.abs(amount) : amount;
+        const multi = redis.multi();
 
-      // Update current balance
-      multi.hincrbyfloat(key, BALANCE_DETAILS.CURRENT, adjustedAmount);
+        for (const { userId, amount, type } of transactions) {
+          const key = `${BALANCE_KEY_PREFIX}${userId}`;
 
-      // Update totals based on transaction type
-      if (type === "CREDIT") {
-        multi.hincrbyfloat(key, BALANCE_DETAILS.TOTAL_TOPUPS, amount);
-      } else {
-        multi.hincrbyfloat(key, BALANCE_DETAILS.TOTAL_USAGE, Math.abs(amount));
+          // Check if key exists first
+          multi.exists(key);
+
+          // Convert amount for DEBIT transactions (negative amount should subtract)
+          const adjustedAmount = type === "DEBIT" ? Math.abs(amount) : amount;
+
+          // Update current balance
+          multi.hincrbyfloat(key, BALANCE_DETAILS.CURRENT, adjustedAmount);
+
+          // Update totals based on transaction type
+          if (type === "CREDIT") {
+            multi.hincrbyfloat(key, BALANCE_DETAILS.TOTAL_TOPUPS, amount);
+          } else {
+            multi.hincrbyfloat(
+              key,
+              BALANCE_DETAILS.TOTAL_USAGE,
+              Math.abs(amount),
+            );
+          }
+
+          // Update timestamp and TTL
+          multi.hset(key, BALANCE_DETAILS.UPDATED_AT, Date.now().toString());
+          multi.expire(key, ttl);
+        }
+
+        const results = await multi.exec();
+        if (results === null) {
+          // Transaction failed due to concurrent modification
+          const delayMs = baseDelayMs * Math.pow(2, attempt);
+          logger.warn(
+            `Batch balance update conflict (attempt ${attempt + 1}), retrying in ${delayMs}ms`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        // Check if any keys didn't exist and need initialization
+        for (let i = 0; i < transactions.length; i++) {
+          const exists = results[i * 5]; // Each transaction has 5 operations
+          if (!exists) {
+            const { userId } = transactions[i];
+            const { current, totalTopups, totalUsage } =
+              await this.getBalanceDetails(userId);
+            await this.initRedisBalance(
+              userId,
+              current,
+              totalTopups,
+              totalUsage,
+            );
+          }
+        }
+
+        logger.info(
+          `Batch balance update succeeded after ${attempt + 1} attempts`,
+          { transactionCount: transactions.length },
+        );
+        return true;
+      } catch (error) {
+        logger.error("Batch balance update error", {
+          error,
+          attempt,
+          transactionCount: transactions.length,
+        });
+        await redis.unwatch();
+        throw error;
       }
-
-      // Update timestamp
-      multi.hset(key, BALANCE_DETAILS.UPDATED_AT, Date.now().toString());
     }
 
-    await multi.exec();
+    logger.error(
+      `Failed batch balance update after ${maxAttempts} attempts due to concurrent modifications`,
+      { transactionCount: transactions.length },
+    );
+    return false;
   }
 
   async getBalanceDetails(userId: string): Promise<{
@@ -242,9 +395,9 @@ export class BalanceRepository {
 
     const row = response.data[0] as ClickHouseBalanceRow;
     return {
-      current: parseFloat(row.current),
-      totalTopups: parseFloat(row.totalTopups),
-      totalUsage: parseFloat(row.totalUsage),
+      current: parseFloat(parseFloat(row.current).toFixed(6)),
+      totalTopups: parseFloat(parseFloat(row.totalTopups).toFixed(6)),
+      totalUsage: parseFloat(parseFloat(row.totalUsage).toFixed(6)),
       updatedAt: new Date(),
     };
   }

@@ -19,6 +19,7 @@ import Link from "next/link";
 import { Alert, AlertDescription } from "@/src/components/ui/alert";
 import { LangfuseLogo } from "@/src/components/LangfuseLogo";
 import { SidebarNotifications } from "@/src/components/nav/sidebar-notifications";
+import { BalanceSection } from "@/src/features/public-api/components/BalanceSection";
 
 type AppSidebarProps = {
   navItems: NavMainItem[];
@@ -50,6 +51,7 @@ export function AppSidebar({
         <NavMain items={secondaryNavItems} />
       </SidebarContent>
       <SidebarFooter>
+        <BalanceSection />
         <NavUser {...userNavProps} />
       </SidebarFooter>
       <SidebarRail />

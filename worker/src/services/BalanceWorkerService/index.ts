@@ -38,11 +38,7 @@ export class BalanceWorkerService {
       await this.updateClickHouseBalance(userId, amount, type);
       console.log(`[BalanceWorker] ClickHouse update completed`);
 
-      console.log(`[BalanceWorker] Updating Redis balance...`);
-      await this.balanceRepo.updateRedisBalance(userId, amount, type);
-      console.log(`[BalanceWorker] Redis update completed`);
-
-      logger.info(`Processed balance transaction`, {
+      logger.info(`Processed ClickHouse balance transaction`, {
         userId,
         amount,
         type,

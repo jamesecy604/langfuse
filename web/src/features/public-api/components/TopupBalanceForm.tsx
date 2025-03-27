@@ -5,7 +5,15 @@ import { useToast } from "../../../hooks/useToast";
 import { api } from "../../../utils/api";
 import { useSession } from "next-auth/react";
 
-export function TopupBalanceForm() {
+interface TopupBalanceFormProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function TopupBalanceForm({
+  isOpen,
+  onOpenChange,
+}: TopupBalanceFormProps) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +47,13 @@ export function TopupBalanceForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form
+      onSubmit={(e) => {
+        handleSubmit(e);
+        onOpenChange(false);
+      }}
+      className="space-y-4"
+    >
       <div>
         <label htmlFor="amount" className="block text-sm font-medium">
           Amount

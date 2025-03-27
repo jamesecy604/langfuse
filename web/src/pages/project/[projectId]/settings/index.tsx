@@ -28,7 +28,6 @@ import { BatchExportsSettingsPage } from "@/src/features/batch-exports/component
 import { ModelsSettings } from "@/src/features/models/components/ModelSettings";
 import ConfigureRetention from "@/src/features/projects/components/ConfigureRetention";
 import ContainerPage from "@/src/components/layouts/container-page";
-import { TopupBalanceForm } from "@/src/features/public-api/components/TopupBalanceForm";
 
 type ProjectSettingsPage = {
   title: string;
@@ -74,12 +73,6 @@ export const getProjectSettingsPages = ({
   showRetentionSettings: boolean;
   showLLMConnectionsSettings: boolean;
 }): ProjectSettingsPage[] => [
-  {
-    title: "Balance",
-    slug: "balance",
-    cmdKKeywords: ["topup", "credit", "payment"],
-    content: <TopupBalanceForm />,
-  },
   {
     title: "General",
     slug: "index",
