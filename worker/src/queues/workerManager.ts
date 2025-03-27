@@ -11,6 +11,7 @@ import {
   redisQueueRetryOptions,
   traceException,
 } from "@langfuse/shared/src/server";
+import { BalanceWorkerService } from "../services/BalanceWorkerService";
 
 export class WorkerManager {
   private static workers: { [key: string]: Worker } = {};

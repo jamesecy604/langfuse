@@ -11,6 +11,7 @@ import {
 } from "../../../../../../../../packages/shared/src/server/auth/apiKeys";
 import { ApiAuthService } from "@/src/features/public-api/server/apiAuth";
 import { redis } from "@langfuse/shared/src/server";
+import { BalanceService } from "../../../../../../../../packages/shared/src/server/services/balanceService";
 
 export async function POST(
   request: Request,
@@ -53,8 +54,23 @@ export async function POST(
     redis,
   ).fetchUserApiKeyAndAddToRedis(hashFromProvidedKey);
   // Compare with stored fast hashed secret key
-  if (hashFromProvidedKey !== apiKeyRecord?.fastHashedSecretKey) {
+  if (
+    !apiKeyRecord?.userId ||
+    hashFromProvidedKey !== apiKeyRecord?.fastHashedSecretKey
+  ) {
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+  }
+
+  // Initialize BalanceService
+  const balanceService = new BalanceService();
+
+  // Check user balance before proceeding
+  const balance = await balanceService.getCurrentBalance(apiKeyRecord.userId);
+  if (balance <= 0) {
+    return NextResponse.json(
+      { error: "User balance limit reached" },
+      { status: 402 },
+    );
   }
 
   if (apiKeyRecord.projectId !== params.projectId) {
@@ -247,6 +263,14 @@ export async function POST(
                 ((usage.completion_tokens * outputPrice) / 1000).toFixed(6),
               ),
             };
+            // Update balance with the calculated cost
+            await balanceService.updateBalance(
+              apiKeyRecord.userId!,
+              costDetail.inputCost + costDetail.outputCost,
+              "DEBIT",
+              `Chat completion tokens for model ${model}`,
+            );
+
             streamingGeneration.end({
               output: completionText,
               usage: {
@@ -348,6 +372,14 @@ export async function POST(
                 1000000,
             ) / 1000000,
         };
+        // Update balance with the calculated cost
+        await balanceService.updateBalance(
+          apiKeyRecord.userId!,
+          -(costDetail.inputCost + costDetail.outputCost),
+          "DEBIT",
+          `Chat completion tokens for model ${model}`,
+        );
+
         completionGeneration.end({
           output: response.choices[0]?.message?.content || "",
           usage: {

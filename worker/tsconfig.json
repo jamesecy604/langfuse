@@ -10,7 +10,8 @@
     "outDir": "./dist",
     "types": ["node"],
     "downlevelIteration": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "jsx": "react"
   },
   "include": ["."],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]

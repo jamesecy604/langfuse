@@ -18,6 +18,7 @@ import { DataRetentionProcessingQueue } from "./dataRetentionProcessingQueue";
 import { BatchActionQueue } from "./batchActionQueue";
 import { CreateEvalQueue } from "./createEvalQueue";
 import { ScoreDeleteQueue } from "./scoreDelete";
+import { BalanceTransactionQueue } from "./balanceTransactionQueue";
 
 export function getQueue(queueName: QueueName): Queue | null {
   switch (queueName) {
@@ -59,6 +60,8 @@ export function getQueue(queueName: QueueName): Queue | null {
       return CreateEvalQueue.getInstance();
     case QueueName.ScoreDelete:
       return ScoreDeleteQueue.getInstance();
+    case QueueName.BalanceTransactionQueue:
+      return BalanceTransactionQueue.getInstance();
     default:
       const exhaustiveCheckDefault: never = queueName;
       throw new Error(`Queue ${queueName} not found`);

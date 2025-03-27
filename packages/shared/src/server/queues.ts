@@ -167,6 +167,7 @@ export enum QueueName {
   BatchActionQueue = "batch-action-queue",
   CreateEvalQueue = "create-eval-queue",
   ScoreDelete = "score-delete",
+  BalanceTransactionQueue = "balance-transaction-queue",
 }
 
 export enum QueueJobs {
@@ -189,6 +190,7 @@ export enum QueueJobs {
   BatchActionProcessingJob = "batch-action-processing-job",
   CreateEvalJob = "create-eval-job",
   ScoreDelete = "score-delete",
+  BalanceTransactionJob = "balance-transaction-job",
 }
 
 export type TQueueJobTypes = {
@@ -275,5 +277,11 @@ export type TQueueJobTypes = {
     id: string;
     payload: CreateEvalQueueEventType;
     name: QueueJobs.CreateEvalJob;
+  };
+  [QueueName.BalanceTransactionQueue]: {
+    timestamp: Date;
+    id: string;
+    payload: { projectId: string; transactionId: string };
+    name: QueueJobs.BalanceTransactionJob;
   };
 };

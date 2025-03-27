@@ -12,6 +12,17 @@ export const clickhouseClient = (
     opts?: NodeClickHouseClientConfigOptions;
   } = {},
 ) => {
+  if (
+    !env.CLICKHOUSE_URL ||
+    !env.CLICKHOUSE_USER ||
+    !env.CLICKHOUSE_PASSWORD ||
+    !env.CLICKHOUSE_DB
+  ) {
+    throw new Error(
+      "ClickHouse client not initialized - missing required environment variables (CLICKHOUSE_URL, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, CLICKHOUSE_DB)",
+    );
+  }
+
   const headers = params.opts?.http_headers ?? {};
   const activeSpan = getCurrentSpan();
   if (activeSpan) {

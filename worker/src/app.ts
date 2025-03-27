@@ -31,6 +31,7 @@ import { coreDataS3ExportProcessor } from "./queues/coreDataS3ExportQueue";
 
 import { batchActionQueueProcessor } from "./queues/batchActionQueue";
 import { scoreDeleteProcessor } from "./queues/scoreDelete";
+import { BalanceWorkerService } from "./services/BalanceWorkerService";
 
 const app = express();
 
@@ -142,6 +143,31 @@ if (env.QUEUE_CONSUMER_INGESTION_SECONDARY_QUEUE_IS_ENABLED === "true") {
     },
   );
 }
+
+// Register balance transaction queue worker
+WorkerManager.register(
+  QueueName.BalanceTransactionQueue,
+  (job) => {
+    logger.info(`Processing balance transaction job ${job.id}`, {
+      jobData: job.data,
+    });
+    try {
+      const result = new BalanceWorkerService().processQueue(job);
+
+      logger.info(`Successfully processed balance transaction job ${job.id}`);
+      return result;
+    } catch (error) {
+      logger.error(
+        `Failed to process balance transaction job ${job.id}`,
+        error,
+      );
+      throw error;
+    }
+  },
+  {
+    concurrency: 1, // Only process one balance transaction at a time
+  },
+);
 
 process.on("SIGINT", () => onShutdown("SIGINT"));
 process.on("SIGTERM", () => onShutdown("SIGTERM"));

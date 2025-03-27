@@ -57,9 +57,11 @@ export async function upsertClickhouse<
 
         // Write new file directly to ClickHouse. We don't use the ClickHouse writer here as we expect more limited traffic
         // and are not worried that much about latency.
-        await clickhouseClient({
+        const client = clickhouseClient({
           tags: opts.tags,
-        }).insert({
+        });
+        if (!client) throw new Error("ClickHouse client not initialized");
+        await client.insert({
           table: "event_log",
           values: [
             {
@@ -88,7 +90,9 @@ export async function upsertClickhouse<
       }),
     );
 
-    const res = await clickhouseClient({ tags: opts.tags }).insert({
+    const client = clickhouseClient({ tags: opts.tags });
+    if (!client) throw new Error("ClickHouse client not initialized");
+    const res = await client.insert({
       table: opts.table,
       values: opts.records.map((record) => ({
         ...record,
@@ -139,10 +143,12 @@ export async function* queryClickhouseStream<T>(opts: {
         // https://opentelemetry.io/docs/specs/semconv/database/database-spans/
         span.setAttribute("ch.query.text", opts.query);
 
-        const res = await clickhouseClient({
+        const client = clickhouseClient({
           tags: opts.tags,
           opts: opts.clickhouseConfigs,
-        }).query({
+        });
+        if (!client) throw new Error("ClickHouse client not initialized");
+        const res = await client.query({
           query: opts.query,
           format: "JSONEachRow",
           query_params: opts.params,
@@ -195,10 +201,12 @@ export async function queryClickhouse<T>(opts: {
     // https://opentelemetry.io/docs/specs/semconv/database/database-spans/
     span.setAttribute("ch.query.text", opts.query);
 
-    const res = await clickhouseClient({
+    const client = clickhouseClient({
       tags: opts.tags,
       opts: opts.clickhouseConfigs,
-    }).query({
+    });
+    if (!client) throw new Error("ClickHouse client not initialized");
+    const res = await client.query({
       query: opts.query,
       format: "JSONEachRow",
       query_params: opts.params,
@@ -241,10 +249,12 @@ export async function commandClickhouse(opts: {
   return await instrumentAsync({ name: "clickhouse-command" }, async (span) => {
     // https://opentelemetry.io/docs/specs/semconv/database/database-spans/
     span.setAttribute("ch.query.text", opts.query);
-    const res = await clickhouseClient({
+    const client = clickhouseClient({
       tags: opts.tags,
       opts: opts.clickhouseConfigs,
-    }).command({
+    });
+    if (!client) throw new Error("ClickHouse client not initialized");
+    const res = await client.command({
       query: opts.query,
       query_params: opts.params,
     });
