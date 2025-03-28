@@ -32,6 +32,7 @@ import { coreDataS3ExportProcessor } from "./queues/coreDataS3ExportQueue";
 import { batchActionQueueProcessor } from "./queues/batchActionQueue";
 import { scoreDeleteProcessor } from "./queues/scoreDelete";
 import { BalanceWorkerService } from "./services/BalanceWorkerService";
+import { TokenUsageWorkerService } from "./services/TokenUsageWorkerService";
 
 const app = express();
 
@@ -166,6 +167,28 @@ WorkerManager.register(
   },
   {
     concurrency: 1, // Only process one balance transaction at a time
+  },
+);
+
+// Register token usage queue worker
+WorkerManager.register(
+  QueueName.TokenUsageQueue,
+  (job) => {
+    logger.info(`Processing token usage job ${job.id}`, {
+      jobData: job.data,
+    });
+    try {
+      const result = new TokenUsageWorkerService().processQueue(job);
+
+      logger.info(`Successfully processed token usage job ${job.id}`);
+      return result;
+    } catch (error) {
+      logger.error(`Failed to process token usage job ${job.id}`, error);
+      throw error;
+    }
+  },
+  {
+    concurrency: 1, // Only process one token usage at a time
   },
 );
 

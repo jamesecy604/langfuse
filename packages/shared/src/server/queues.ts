@@ -168,6 +168,7 @@ export enum QueueName {
   CreateEvalQueue = "create-eval-queue",
   ScoreDelete = "score-delete",
   BalanceTransactionQueue = "balance-transaction-queue",
+  TokenUsageQueue = "token-usage-queue",
 }
 
 export enum QueueJobs {
@@ -191,6 +192,7 @@ export enum QueueJobs {
   CreateEvalJob = "create-eval-job",
   ScoreDelete = "score-delete",
   BalanceTransactionJob = "balance-transaction-job",
+  TokenUsageJob = "token-usage-job",
 }
 
 export type TQueueJobTypes = {
@@ -283,5 +285,11 @@ export type TQueueJobTypes = {
     id: string;
     payload: { projectId: string; transactionId: string };
     name: QueueJobs.BalanceTransactionJob;
+  };
+  [QueueName.TokenUsageQueue]: {
+    timestamp: Date;
+    id: string;
+    payload: { projectId: string; transactionId: string };
+    name: QueueJobs.TokenUsageJob;
   };
 };

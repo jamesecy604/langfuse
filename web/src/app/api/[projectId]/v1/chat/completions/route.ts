@@ -12,6 +12,7 @@ import {
 import { ApiAuthService } from "@/src/features/public-api/server/apiAuth";
 import { redis } from "@langfuse/shared/src/server";
 import { BalanceService } from "../../../../../../../../packages/shared/src/server/services/balanceService";
+import { TokenUsageService } from "../../../../../../../../packages/shared/src/server/services/tokenUsageService";
 
 export async function POST(
   request: Request,
@@ -63,10 +64,11 @@ export async function POST(
 
   // Initialize BalanceService
   const balanceService = new BalanceService();
+  const tokenUsageService = new TokenUsageService();
 
   // Check user balance before proceeding
   const balance = await balanceService.getCurrentBalance(apiKeyRecord.userId);
-  if (balance <= 0) {
+  if (balance === null || balance <= 0) {
     return NextResponse.json(
       { error: "User balance limit reached" },
       { status: 402 },
@@ -152,11 +154,61 @@ export async function POST(
       );
     }
 
-    const llmConfig = await prisma.llmApiKeys.findFirst({
+    // Get all LLM API keys for the project
+    const llmApiKeys = await prisma.llmApiKeys.findMany({
       where: {
         projectId: modelConfig.projectId,
       },
+      select: {
+        id: true,
+        secretKey: true,
+        provider: true,
+        adapter: true,
+        customModels: true,
+        withDefaultModels: true,
+        baseURL: true,
+      },
     });
+
+    // Filter keys that support the requested model
+    const supportedKeys = llmApiKeys.filter((key) => {
+      // Check if model is in custom models
+      if (key.customModels.includes(model)) {
+        return true;
+      }
+
+      // // Check if provider supports model by default
+      // if (key.withDefaultModels) {
+      //   // TODO: Implement provider-specific model validation
+      //   // For now assume all default models are supported
+      //   return true;
+      // }
+
+      return false;
+    });
+
+    if (!supportedKeys.length) {
+      return NextResponse.json(
+        {
+          error: `LLM API credentials not configured for project ${params.projectId}`,
+        },
+        { status: 404 },
+      );
+    }
+
+    // Choose API key with least usage
+    const llmApiKeyId = await tokenUsageService.chooseLLMApiKeyId(
+      supportedKeys.map((k) => k.id),
+    );
+    console.log("===============================choosed", llmApiKeyId);
+    if (!llmApiKeyId) {
+      return NextResponse.json(
+        { error: "Failed to select API key" },
+        { status: 500 },
+      );
+    }
+
+    const llmConfig = llmApiKeys.find((k) => k.id === llmApiKeyId);
 
     if (!llmConfig) {
       return NextResponse.json(
@@ -269,6 +321,14 @@ export async function POST(
               costDetail.inputCost + costDetail.outputCost,
               "DEBIT",
               `Chat completion tokens for model ${model}`,
+            );
+
+            //update tokenUsage with calculated total tokens and total cost
+            await tokenUsageService.updateTokenUsage(
+              llmApiKeyId,
+              usage.total_tokens,
+              costDetail.inputCost + costDetail.outputCost,
+              "",
             );
 
             streamingGeneration.end({
