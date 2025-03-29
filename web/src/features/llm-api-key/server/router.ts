@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { auditLog } from "@/src/features/audit-logs/auditLog";
 import { CreateLlmApiKey } from "@/src/features/llm-api-key/types";
 import { throwIfNoProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
@@ -66,7 +67,21 @@ export const llmApiKeyRouter = createTRPCRouter({
         });
       } catch (e) {
         logger.error(e);
-        throw e;
+        if (
+          e instanceof Error &&
+          e.message.includes("Unique constraint failed")
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "displaySecretKey: This API key already exists for this project",
+            cause: { silent: true },
+          });
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create LLM API key",
+        });
       }
     }),
   delete: protectedProjectProcedure
@@ -101,6 +116,7 @@ export const llmApiKeyRouter = createTRPCRouter({
     .input(
       z.object({
         projectId: z.string(),
+        model: z.string().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -109,6 +125,19 @@ export const llmApiKeyRouter = createTRPCRouter({
         projectId: input.projectId,
         scope: "llmApiKeys:read",
       });
+
+      const getModelFilter = (model: string | undefined) => {
+        if (!model) return {};
+        return {
+          AND: [
+            {
+              customModels: {
+                has: model,
+              },
+            },
+          ],
+        };
+      };
 
       const apiKeys = z
         .array(
@@ -135,13 +164,16 @@ export const llmApiKeyRouter = createTRPCRouter({
             },
             where: {
               projectId: input.projectId,
+              ...getModelFilter(input.model),
             },
+            distinct: ["id"],
           }),
         );
 
       const count = await ctx.prisma.llmApiKeys.count({
         where: {
           projectId: input.projectId,
+          ...getModelFilter(input.model),
         },
       });
 

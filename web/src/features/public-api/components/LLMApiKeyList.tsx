@@ -2,6 +2,13 @@ import { TrashIcon } from "lucide-react";
 import { useState } from "react";
 
 import Header from "@/src/components/layouts/header";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/src/components/ui/select";
 import { Button } from "@/src/components/ui/button";
 import { Card } from "@/src/components/ui/card";
 import {
@@ -40,12 +47,27 @@ export function LlmApiKeyList(props: { projectId: string }) {
   // entitlements.includes("playground") ||
   // entitlements.includes("model-based-evaluations");
 
+  const [selectedModel, setSelectedModel] = useState("all");
   const apiKeys = api.llmApiKey.all.useQuery(
     {
       projectId: props.projectId,
+      model: selectedModel === "all" ? undefined : selectedModel,
     },
     {
       enabled: hasAccess && isAvailable,
+    },
+  );
+
+  // Get available models from models router
+  const models = api.models.getAll.useQuery(
+    {
+      projectId: props.projectId,
+      page: 0,
+      limit: 100, // Fetch all models at once
+    },
+    {
+      enabled: hasAccess && isAvailable,
+      select: (data) => data.models, // Only return the models array
     },
   );
 
@@ -72,6 +94,35 @@ export function LlmApiKeyList(props: { projectId: string }) {
   return (
     <div id="llm-api-keys">
       <Header title="LLM API keys" />
+      <div className="mb-4 flex items-center gap-2">
+        <Select value={selectedModel} onValueChange={setSelectedModel}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by model" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All models</SelectItem>
+            {models.data?.map(
+              (model: {
+                projectId: string | null;
+                id: string;
+                modelName: string;
+                matchPattern: string;
+                tokenizerConfig:
+                  | string
+                  | Record<string, string | number>
+                  | null;
+                tokenizerId?: "openai" | "claude" | null;
+                prices: Record<string, number>;
+                lastUsed?: Date | null;
+              }) => (
+                <SelectItem key={model.id} value={model.modelName}>
+                  {model.modelName}
+                </SelectItem>
+              ),
+            )}
+          </SelectContent>
+        </Select>
+      </div>
       <p className="mb-4 text-sm">
         These keys are used to power the Langfuse playground and evaluations
         feature and will incur costs based on usage with your key provider.

@@ -136,15 +136,6 @@ export function CreateLLMApiKeyForm({
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!projectId) return console.error("No project ID found.");
-    if (
-      existingKeys?.data?.data.map((k) => k.provider).includes(values.provider)
-    ) {
-      form.setError("provider", {
-        type: "manual",
-        message: "There already exists an API key for this provider.",
-      });
-      return;
-    }
     capture("project_settings:llm_api_key_create", {
       provider: values.provider,
     });
@@ -195,7 +186,7 @@ export function CreateLLMApiKeyForm({
       if (!testResult.success) throw new Error(testResult.error);
     } catch (error) {
       console.error(error);
-      form.setError("root", {
+      form.setError("secretKey", {
         type: "manual",
         message:
           error instanceof Error
@@ -214,6 +205,13 @@ export function CreateLLMApiKeyForm({
       })
       .catch((error) => {
         console.error(error);
+        if (error.message.includes("displaySecretKey")) {
+          form.setError("secretKey", {
+            type: "manual",
+            message: "This API key already exists for this project",
+          });
+          return;
+        }
       });
   }
 
@@ -230,9 +228,7 @@ export function CreateLLMApiKeyForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Provider name</FormLabel>
-              <FormDescription>
-                Name to identify the key within Langfuse.
-              </FormDescription>
+              <FormDescription>Name to identify the key.</FormDescription>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -572,10 +568,6 @@ export function CreateLLMApiKeyForm({
         >
           Save new LLM API key
         </Button>
-
-        {form.formState.errors.root && (
-          <FormMessage>{form.formState.errors.root.message}</FormMessage>
-        )}
       </form>
     </Form>
   );

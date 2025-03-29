@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS llm_api_key_usage
 )
 ENGINE = ReplacingMergeTree(_version)
 PRIMARY KEY (llm_api_key_id)
-ORDER BY (llm_api_key_id)
-TTL updated_at + INTERVAL 90 DAY;
+ORDER BY (llm_api_key_id);
 
 -- Create table for tracking token usage history
 CREATE TABLE IF NOT EXISTS total_usage_token
@@ -26,5 +25,4 @@ CREATE TABLE IF NOT EXISTS total_usage_token
 )
 ENGINE = ReplacingMergeTree(_version)
 PRIMARY KEY (llm_api_key_id, id)
-ORDER BY (llm_api_key_id, id, updated_at)
-TTL updated_at + INTERVAL 180 DAY;
+ORDER BY (llm_api_key_id, id, updated_at);
