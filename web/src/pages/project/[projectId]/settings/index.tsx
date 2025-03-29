@@ -14,6 +14,7 @@ import { MembersTable } from "@/src/features/rbac/components/MembersTable";
 import { JSONView } from "@/src/components/ui/CodeJsonViewer";
 import { PostHogLogo } from "@/src/components/PosthogLogo";
 import { Card } from "@/src/components/ui/card";
+import CostUsagePage from "@/src/pages/project/[projectId]/cost-usage";
 import { ScoreConfigSettings } from "@/src/features/scores/components/ScoreConfigSettings";
 import { TransferProjectButton } from "@/src/features/projects/components/TransferProjectButton";
 import {
@@ -156,7 +157,11 @@ export const getProjectSettingsPages = ({
     title: "Cost & Usage",
     slug: "cost-usage",
     cmdKKeywords: ["cost", "usage", "tokens", "spend"],
-    href: `/project/${project.id}/cost-usage`,
+    content: (
+      <div className="flex flex-col gap-6">
+        <CostUsagePage />
+      </div>
+    ),
   },
   {
     title: "Models",

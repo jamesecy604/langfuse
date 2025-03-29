@@ -111,7 +111,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
 
     const keyInfo = await this.prisma.llmApiKeys.findUnique({
       where: { id: llmApiKeyId },
-      select: { secretKey: true, provider: true },
+      select: { displaySecretKey: true, provider: true },
     });
 
     const usage = ((await result.json())?.data?.[0] as
@@ -124,7 +124,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
     return {
       tokens: parseInt(usage.tokens),
       cost: usage.cost ? parseFloat(usage.cost) : null,
-      secretKey: keyInfo?.secretKey || "",
+      secretKey: keyInfo?.displaySecretKey || "",
       provider: keyInfo?.provider || "",
     };
   }
@@ -136,7 +136,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
   ) {
     const keys = await this.prisma.llmApiKeys.findMany({
       where: { projectId },
-      select: { id: true, secretKey: true, provider: true },
+      select: { id: true, displaySecretKey: true, provider: true },
     });
 
     if (!keys.length) return { items: [], summaryCost: 0, summaryToken: 0 };
@@ -186,7 +186,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
         llmApiKeyId: key.id,
         tokens,
         cost,
-        secretKey: key.secretKey,
+        secretKey: key.displaySecretKey,
         provider: key.provider,
       };
     });
@@ -209,7 +209,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
 
     const keys = await this.prisma.llmApiKeys.findMany({
       where,
-      select: { id: true, secretKey: true, provider: true },
+      select: { id: true, displaySecretKey: true, provider: true },
     });
 
     if (!keys.length) return { items: [], summaryCost: 0, summaryToken: 0 };
@@ -260,7 +260,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
         llmApiKeyId: key.id,
         tokens,
         cost,
-        secretKey: key.secretKey,
+        secretKey: key.displaySecretKey,
         provider: key.provider,
       };
     });
@@ -322,7 +322,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
     ] as string[];
     const keys = await this.prisma.llmApiKeys.findMany({
       where: { id: { in: keyIds } },
-      select: { id: true, secretKey: true, provider: true },
+      select: { id: true, displaySecretKey: true, provider: true },
     });
 
     let summaryCost = 0;
@@ -341,7 +341,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
         llmApiKeyId: usage.llm_api_key_id,
         tokens,
         cost,
-        secretKey: key?.secretKey || "",
+        secretKey: key?.displaySecretKey || "",
         provider: key?.provider || "",
       };
     });
