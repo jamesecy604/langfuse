@@ -153,6 +153,12 @@ export const getProjectSettingsPages = ({
     show: showLLMConnectionsSettings,
   },
   {
+    title: "Cost & Usage",
+    slug: "cost-usage",
+    cmdKKeywords: ["cost", "usage", "tokens", "spend"],
+    href: `/project/${project.id}/cost-usage`,
+  },
+  {
     title: "Models",
     slug: "models",
     cmdKKeywords: ["cost", "token"],

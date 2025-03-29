@@ -6,15 +6,16 @@ import {
   createTRPCRouter,
   protectedProjectProcedure,
 } from "@/src/server/api/trpc";
-import { CostUsageService } from "@/../packages/shared/src/server/services/costUsageService";
-import { CostUsageRepositoryImpl } from "@/../packages/shared/src/server/repositories/costUsageRepository";
+import { CostUsageService } from "../../../../../packages/shared/src/server/services/costUsageService";
+import { CostUsageRepositoryImpl } from "../../../../../packages/shared/src/server/repositories/costUsageRepository";
+import { clickhouseClient } from "../../../../../packages/shared/src/server/clickhouse/client";
 
 export const llmApiKeyUsageRouter = createTRPCRouter({
-  byDisplaySecretKey: protectedProjectProcedure
+  usage: protectedProjectProcedure
     .input(
       z.object({
         projectId: z.string(),
-        displaySecretKey: z.string().optional(),
+        displaySecretKey: z.string(),
         from: z.date().optional(),
         to: z.date().optional(),
         provider: z.string().optional(),
@@ -28,16 +29,18 @@ export const llmApiKeyUsageRouter = createTRPCRouter({
       });
 
       const costUsageRepository = new CostUsageRepositoryImpl(
-        ctx.DB,
+        clickhouseClient(),
         ctx.prisma,
       );
       const costUsageService = new CostUsageService(costUsageRepository);
 
-      const usage = await costUsageService.getUsageByDisplaySecretKey(
+      const usage = await costUsageService.getFilteredCostUsage(
         input.displaySecretKey,
-        input.from,
-        input.to,
-        input.provider,
+        {
+          from: input.from,
+          to: input.to,
+          provider: input.provider,
+        },
       );
 
       await auditLog({

@@ -1,16 +1,17 @@
 import { useRouter } from "next/router";
 import { useState } from "react";
+import { Input } from "@/src/components/ui/input";
 import { api } from "@/src/utils/api";
 import { useHasProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
 import { DataTable } from "@/src/components/table/data-table";
 import { type ColumnDef } from "@tanstack/react-table";
+import { type LangfuseColumnDef } from "@/src/components/table/types";
 import { type RouterOutputs } from "@/src/utils/api";
 import Header from "@/src/components/layouts/header";
 import { Card } from "@/src/components/ui/card";
-import StatsCard from "@/src/components/stats-cards";
 import { DateRangePicker } from "@/src/components/date-range-picker";
 import { type DateRange } from "@/src/components/date-range-picker";
-import { Input } from "@/src/components/ui/input";
+import StatsCards from "@/src/components/stats-cards";
 import {
   Select,
   SelectContent,
@@ -19,9 +20,44 @@ import {
   SelectValue,
 } from "@/src/components/ui/select";
 
-type UsageData = RouterOutputs["llmApiKeyUsage"]["byDisplaySecretKey"][0];
+type RawUsageItem = {
+  tokens: number;
+  cost: number | null;
+  secretKey: string;
+  provider: string;
+  llmApiKeyId?: string;
+};
 
-function calculateTotals(data: UsageData[]) {
+type UsageItem = RawUsageItem & {
+  displaySecretKey: string;
+};
+
+type PaginatedUsageResponse = {
+  items: RawUsageItem[];
+  summaryCost: number;
+  summaryToken: number;
+};
+
+type UsageResponse = PaginatedUsageResponse | RawUsageItem | undefined;
+
+function normalizeUsageData(data: UsageResponse): UsageItem[] {
+  if (!data) return [];
+  if ("items" in data) {
+    return data.items.map((item: RawUsageItem) => ({
+      ...item,
+      displaySecretKey: `${item.secretKey.slice(0, 4)}...${item.secretKey.slice(-4)}`,
+    }));
+  }
+  const singleItem = data as RawUsageItem;
+  return [
+    {
+      ...singleItem,
+      displaySecretKey: `${singleItem.secretKey.slice(0, 4)}...${singleItem.secretKey.slice(-4)}`,
+    },
+  ];
+}
+
+function calculateTotals(data: UsageItem[]) {
   return {
     totalTokens: data.reduce((sum, item) => sum + item.tokens, 0),
     totalCost: data.reduce((sum, item) => sum + (item.cost || 0), 0),
@@ -44,18 +80,21 @@ export default function CostUsagePage() {
   const [providerFilter, setProviderFilter] = useState<string>("");
   const [secretKeyFilter, setSecretKeyFilter] = useState<string>("");
 
-  const apiKeys = api.llmApiKeyUsage.byDisplaySecretKey.useQuery(
+  const apiKeys = api.llmApiKeyUsage.usage.useQuery(
     {
       projectId,
+      displaySecretKey: secretKeyFilter,
       from: dateRange.from,
       to: dateRange.to,
       provider: providerFilter || undefined,
-      displaySecretKey: secretKeyFilter || undefined,
     },
     { enabled: hasAccess },
   );
 
-  const columns: LangfuseColumnDef<UsageData>[] = [
+  const normalizedData: UsageItem[] = normalizeUsageData(apiKeys.data);
+  const totals = calculateTotals(normalizedData);
+
+  const columns: LangfuseColumnDef<UsageItem>[] = [
     {
       accessorKey: "displaySecretKey",
       header: "API Key",
@@ -63,31 +102,34 @@ export default function CostUsagePage() {
     {
       accessorKey: "tokens",
       header: "Tokens Used",
-      cell: ({ row }) => row.original.tokens.toLocaleString(),
+      cell: ({ row }) => row.getValue<number>("tokens").toLocaleString(),
     },
     {
       accessorKey: "cost",
       header: "Cost",
-      cell: ({ row }) =>
-        row.original.cost ? `$${row.original.cost.toFixed(4)}` : "-",
+      cell: ({ row }) => {
+        const cost = row.getValue<number | null>("cost");
+        return cost ? `$${cost.toFixed(4)}` : "-";
+      },
     },
   ];
 
   if (!hasAccess) {
-    return <div>You don't have access to view this page</div>;
+    return (
+      <div className="p-4">You don't have access to view LLM API key usage</div>
+    );
   }
 
   return (
     <div className="md:container">
       <Header
         title="LLM API Key Cost & Usage"
-        help="View usage and costs for your LLM API keys"
+        help={{
+          description: "View usage and costs for your LLM API keys",
+        }}
       />
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <DateRangePicker
-          dateRange={dateRange}
-          onDateRangeChange={setDateRange}
-        />
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
         <div className="flex gap-2">
           <Input
             placeholder="Filter by API Key"
@@ -108,31 +150,29 @@ export default function CostUsagePage() {
           </Select>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <StatsCard
-          title="Total Tokens"
-          value={
-            apiKeys.data
-              ? calculateTotals(apiKeys.data.data).totalTokens.toLocaleString()
-              : "-"
-          }
-          isLoading={apiKeys.isLoading}
-        />
-        <StatsCard
-          title="Total Cost"
-          value={
-            apiKeys.data
-              ? `$${calculateTotals(apiKeys.data.data).totalCost.toFixed(4)}`
-              : "-"
-          }
-          isLoading={apiKeys.isLoading}
-        />
-      </div>
+      <StatsCards
+        stats={[
+          {
+            name: "Total Tokens",
+            value: totals.totalTokens.toLocaleString(),
+          },
+          {
+            name: "Total Cost",
+            value: `$${totals.totalCost.toFixed(4)}`,
+          },
+        ]}
+      />
       <Card className="mt-5">
         <DataTable
           columns={columns}
           data={{
-            data: apiKeys.data || [],
+            data: normalizedData.filter((item: UsageItem) =>
+              secretKeyFilter
+                ? item.displaySecretKey
+                    .toLowerCase()
+                    .includes(secretKeyFilter.toLowerCase())
+                : true,
+            ),
             isLoading: apiKeys.isLoading,
             isError: apiKeys.isError,
           }}

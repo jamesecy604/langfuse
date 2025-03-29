@@ -29,45 +29,50 @@ export interface CostUsageRepository {
     projectId: string,
     startDate?: Date,
     endDate?: Date,
-  ): Promise<
-    Array<{
+  ): Promise<{
+    items: Array<{
       llmApiKeyId: string;
       tokens: number;
       cost: number | null;
       secretKey: string;
       provider: string;
-    }>
-  >;
+    }>;
+    summaryCost: number;
+    summaryToken: number;
+  }>;
 
   getUsageByProvider(
     provider: string,
     startDate?: Date,
     endDate?: Date,
-  ): Promise<
-    Array<{
+    llmApiKeyId?: string,
+  ): Promise<{
+    items: Array<{
       llmApiKeyId: string;
       tokens: number;
       cost: number | null;
       secretKey: string;
       provider: string;
-      summaryCost: number;
-      summaryToken: number;
-    }>
-  >;
+    }>;
+    summaryCost: number;
+    summaryToken: number;
+  }>;
 
   getUsageByDateRange(
     startDate: Date,
     endDate: Date,
     llmApiKeyId?: string,
-  ): Promise<
-    Array<{
+  ): Promise<{
+    items: Array<{
       llmApiKeyId: string;
       tokens: number;
       cost: number | null;
       secretKey: string;
       provider: string;
-    }>
-  >;
+    }>;
+    summaryCost: number;
+    summaryToken: number;
+  }>;
 }
 
 export class CostUsageRepositoryImpl implements CostUsageRepository {
@@ -132,7 +137,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
       select: { id: true, secretKey: true, provider: true },
     });
 
-    if (!keys.length) return [];
+    if (!keys.length) return { items: [], summaryCost: 0, summaryToken: 0 };
 
     const usageQuery = `
       SELECT 
@@ -160,28 +165,47 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
     const usages =
       ((await result.json())?.data as ClickHouseUsageResult[]) || [];
 
-    return keys.map((key) => {
+    let summaryCost = 0;
+    let summaryToken = 0;
+    const items = keys.map((key) => {
       const usage = usages.find((u) => u.llm_api_key_id === key.id) || {
         tokens: "0",
         cost: null,
       };
+      const cost = usage.cost ? parseFloat(usage.cost) : null;
+      const tokens = parseInt(usage.tokens);
+
+      if (cost !== null) {
+        summaryCost += cost;
+      }
+      summaryToken += tokens;
+
       return {
         llmApiKeyId: key.id,
-        tokens: parseInt(usage.tokens),
-        cost: usage.cost ? parseFloat(usage.cost) : null,
+        tokens,
+        cost,
         secretKey: key.secretKey,
         provider: key.provider,
       };
     });
+
+    return { items, summaryCost, summaryToken };
   }
 
-  async getUsageByProvider(provider: string, startDate?: Date, endDate?: Date) {
+  async getUsageByProvider(
+    provider: string,
+    startDate?: Date,
+    endDate?: Date,
+    llmApiKeyId?: string,
+  ) {
+    const where = llmApiKeyId ? { provider, id: llmApiKeyId } : { provider };
+
     const keys = await this.prisma.llmApiKeys.findMany({
-      where: { provider },
+      where,
       select: { id: true, secretKey: true, provider: true },
     });
 
-    if (!keys.length) return [];
+    if (!keys.length) return { items: [], summaryCost: 0, summaryToken: 0 };
 
     const usageQuery = `
       SELECT 
@@ -231,12 +255,10 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
         cost,
         secretKey: key.secretKey,
         provider: key.provider,
-        summaryCost,
-        summaryToken,
       };
     });
 
-    return items;
+    return { items, summaryCost, summaryToken };
   }
 
   async getUsageByDateRange(
@@ -270,7 +292,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
 
     const usages =
       ((await result.json())?.data as ClickHouseUsageResult[]) || [];
-    if (!usages.length) return [];
+    if (!usages.length) return { items: [], summaryCost: 0, summaryToken: 0 };
 
     // Get key info for all keys found in results
     const keyIds = [
@@ -281,15 +303,27 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
       select: { id: true, secretKey: true, provider: true },
     });
 
-    return usages.map((usage) => {
+    let summaryCost = 0;
+    let summaryToken = 0;
+    const items = usages.map((usage) => {
       const key = keys.find((k) => k.id === usage.llm_api_key_id);
+      const cost = usage.cost ? parseFloat(usage.cost) : null;
+      const tokens = parseInt(usage.tokens);
+
+      if (cost !== null) {
+        summaryCost += cost;
+      }
+      summaryToken += tokens;
+
       return {
         llmApiKeyId: usage.llm_api_key_id,
-        tokens: parseInt(usage.tokens),
-        cost: usage.cost ? parseFloat(usage.cost) : null,
+        tokens,
+        cost,
         secretKey: key?.secretKey || "",
         provider: key?.provider || "",
       };
     });
+
+    return { items, summaryCost, summaryToken };
   }
 }

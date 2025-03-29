@@ -497,6 +497,22 @@ export async function POST(
       },
     });
 
+    // Handle OpenAI API errors specifically
+    if (
+      error instanceof Error &&
+      "status" in error &&
+      typeof error.status === "number"
+    ) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "code" in error ? error.code : undefined,
+          type: "type" in error ? error.type : undefined,
+        },
+        { status: error.status },
+      );
+    }
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

@@ -29,6 +29,7 @@ import { backgroundMigrationsRouter } from "@/src/features/background-migrations
 import { auditLogsRouter } from "./routers/auditLogs";
 import { tableRouter } from "@/src/features/table/server/tableRouter";
 import { balanceRouter } from "@/src/server/api/routers/balance";
+import { llmApiKeyUsageRouter } from "@/src/features/llm-api-key/server/usageRouter";
 
 /**
  * This is the primary router for your server.
@@ -64,6 +65,7 @@ export const appRouter = createTRPCRouter({
   auditLogs: auditLogsRouter,
   table: tableRouter,
   balance: balanceRouter,
+  llmApiKeyUsage: llmApiKeyUsageRouter,
 });
 
 // export type definition of API

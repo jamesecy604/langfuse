@@ -1,14 +1,19 @@
-interface Statistic {
+import React from "react";
+
+interface StatItem {
   name: string;
-  stat: string;
+  value: string | number;
+  change?: string;
+  changeType?: "increase" | "decrease";
 }
 
-export default function StatsCards({ stats }: { stats: Statistic[] }) {
+interface StatsCardsProps {
+  stats: StatItem[];
+}
+
+export default function StatsCards({ stats = [] }: StatsCardsProps) {
   return (
     <div>
-      <h3 className="text-base font-semibold leading-6 text-primary">
-        Model configuration
-      </h3>
       <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-4">
         {stats.map((item) => (
           <div
@@ -18,8 +23,8 @@ export default function StatsCards({ stats }: { stats: Statistic[] }) {
             <dt className="truncate text-sm font-medium text-muted-foreground">
               {item.name}
             </dt>
-            <dd className="mt-1 text-3xl font-semibold tracking-tight text-primary">
-              {item.stat}
+            <dd className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+              {item.value}
             </dd>
           </div>
         ))}
