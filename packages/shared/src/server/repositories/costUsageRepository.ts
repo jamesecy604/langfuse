@@ -46,6 +46,7 @@ export interface CostUsageRepository {
     startDate?: Date,
     endDate?: Date,
     llmApiKeyId?: string,
+    projectId?: string,
   ): Promise<{
     items: Array<{
       llmApiKeyId: string;
@@ -62,6 +63,7 @@ export interface CostUsageRepository {
     startDate: Date,
     endDate: Date,
     llmApiKeyId?: string,
+    projectId?: string,
   ): Promise<{
     items: Array<{
       llmApiKeyId: string;
@@ -100,8 +102,8 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
       query_params: {
         llmApiKeyId,
         ...(startDate && {
-          startDate: startDate.toISOString(),
-          endDate: endDate?.toISOString() || new Date().toISOString(),
+          startDate: startDate.toISOString().split(".")[0],
+          endDate: (endDate || new Date()).toISOString().split(".")[0],
         }),
       },
       format: "JSON",
@@ -155,8 +157,8 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
       query_params: {
         llmApiKeyIds: keys.map((k) => k.id),
         ...(startDate && {
-          startDate: startDate.toISOString(),
-          endDate: endDate?.toISOString() || new Date().toISOString(),
+          startDate: startDate.toISOString().split(".")[0],
+          endDate: (endDate || new Date()).toISOString().split(".")[0],
         }),
       },
       format: "JSON",
@@ -197,8 +199,13 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
     startDate?: Date,
     endDate?: Date,
     llmApiKeyId?: string,
+    projectId?: string,
   ) {
-    const where = llmApiKeyId ? { provider, id: llmApiKeyId } : { provider };
+    const where = {
+      provider,
+      ...(llmApiKeyId && { id: llmApiKeyId }),
+      ...(projectId && { projectId }),
+    };
 
     const keys = await this.prisma.llmApiKeys.findMany({
       where,
@@ -223,8 +230,8 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
       query_params: {
         llmApiKeyIds: keys.map((k) => k.id),
         ...(startDate && {
-          startDate: startDate.toISOString(),
-          endDate: endDate?.toISOString() || new Date().toISOString(),
+          startDate: startDate.toISOString().split(".")[0],
+          endDate: (endDate || new Date()).toISOString().split(".")[0],
         }),
       },
       format: "JSON",
@@ -265,10 +272,29 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
     startDate: Date,
     endDate: Date,
     llmApiKeyId?: string,
+    projectId?: string,
   ) {
-    const whereClause = llmApiKeyId
-      ? `llm_api_key_id = {llmApiKeyId:String} AND created_at BETWEEN {startDate:DateTime} AND {endDate:DateTime}`
-      : `created_at BETWEEN {startDate:DateTime} AND {endDate:DateTime}`;
+    let whereClause = `created_at BETWEEN {startDate:DateTime} AND {endDate:DateTime}`;
+    const queryParams: Record<string, any> = {
+      startDate: startDate.toISOString().split(".")[0],
+      endDate: endDate.toISOString().split(".")[0],
+    };
+
+    if (llmApiKeyId) {
+      whereClause = `llm_api_key_id = {llmApiKeyId:String} AND ${whereClause}`;
+      queryParams.llmApiKeyId = llmApiKeyId;
+    }
+
+    if (projectId) {
+      const keys = await this.prisma.llmApiKeys.findMany({
+        where: { projectId },
+        select: { id: true },
+      });
+      if (!keys.length) return { items: [], summaryCost: 0, summaryToken: 0 };
+
+      whereClause = `llm_api_key_id IN ({llmApiKeyIds:Array(String)}) AND ${whereClause}`;
+      queryParams.llmApiKeyIds = keys.map((k) => k.id);
+    }
 
     const usageQuery = `
       SELECT 
@@ -282,11 +308,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
 
     const result = await this.clickhouse.query({
       query: usageQuery,
-      query_params: {
-        ...(llmApiKeyId && { llmApiKeyId }),
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-      },
+      query_params: queryParams,
       format: "JSON",
     });
 

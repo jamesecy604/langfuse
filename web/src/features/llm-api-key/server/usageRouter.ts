@@ -21,30 +21,38 @@ export const llmApiKeyUsageRouter = createTRPCRouter({
         provider: z.string().optional(),
       }),
     )
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input, ctx: { prisma, session } }) => {
       throwIfNoProjectAccess({
-        session: ctx.session,
+        session,
         projectId: input.projectId,
         scope: "llmApiKeys:read",
       });
 
       const costUsageRepository = new CostUsageRepositoryImpl(
         clickhouseClient(),
-        ctx.prisma,
+        prisma,
       );
       const costUsageService = new CostUsageService(costUsageRepository);
 
       const usage = await costUsageService.getFilteredCostUsage(
-        input.displaySecretKey,
+        input.projectId,
         {
           from: input.from,
           to: input.to,
           provider: input.provider,
+          llmApiKeyId: input.displaySecretKey
+            ? (
+                await prisma.llmApiKeys.findFirst({
+                  where: { displaySecretKey: input.displaySecretKey },
+                  select: { id: true },
+                })
+              )?.id
+            : undefined,
         },
       );
 
       await auditLog({
-        session: ctx.session,
+        session,
         resourceType: "llmApiKey",
         resourceId: input.displaySecretKey,
         action: "readUsage",

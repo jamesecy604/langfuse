@@ -77,16 +77,16 @@ export default function CostUsagePage() {
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     to: new Date(),
   });
-  const [providerFilter, setProviderFilter] = useState<string>("");
+  const [providerFilter, setProviderFilter] = useState<string>("all");
   const [secretKeyFilter, setSecretKeyFilter] = useState<string>("");
 
   const apiKeys = api.llmApiKeyUsage.usage.useQuery(
     {
       projectId,
-      displaySecretKey: secretKeyFilter,
+      displaySecretKey: secretKeyFilter || "",
       from: dateRange.from,
       to: dateRange.to,
-      provider: providerFilter || undefined,
+      provider: providerFilter === "all" ? undefined : providerFilter,
     },
     { enabled: hasAccess },
   );
@@ -142,7 +142,7 @@ export default function CostUsagePage() {
               <SelectValue placeholder="All Providers" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Providers</SelectItem>
+              <SelectItem value="all">All Providers</SelectItem>
               <SelectItem value="openai">OpenAI</SelectItem>
               <SelectItem value="anthropic">Anthropic</SelectItem>
               <SelectItem value="cohere">Cohere</SelectItem>
@@ -166,13 +166,7 @@ export default function CostUsagePage() {
         <DataTable
           columns={columns}
           data={{
-            data: normalizedData.filter((item: UsageItem) =>
-              secretKeyFilter
-                ? item.displaySecretKey
-                    .toLowerCase()
-                    .includes(secretKeyFilter.toLowerCase())
-                : true,
-            ),
+            data: normalizedData,
             isLoading: apiKeys.isLoading,
             isError: apiKeys.isError,
           }}

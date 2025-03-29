@@ -30,42 +30,41 @@ export class CostUsageService {
   }
 
   async getFilteredCostUsage(
-    displaySecretKey: string,
+    projectId: string,
     filters?: {
       from?: Date;
       to?: Date;
       provider?: string;
+      llmApiKeyId?: string;
     },
   ) {
-    const key = await prisma.llmApiKeys.findFirst({
-      where: { displaySecretKey },
-      select: { id: true },
-    });
-    if (!key) throw new ApiError("LLM API Key not found", 404);
-
     if (filters?.provider && (filters.from || filters.to)) {
       return this.costUsageRepository.getUsageByProvider(
         filters.provider,
         filters.from,
         filters.to,
-        key.id,
+        filters.llmApiKeyId,
+        projectId,
       );
     } else if (filters?.provider) {
       return this.costUsageRepository.getUsageByProvider(
         filters.provider,
         undefined,
         undefined,
-        key.id,
+        filters.llmApiKeyId,
+        projectId,
       );
     } else if (filters?.from || filters?.to) {
       return this.costUsageRepository.getUsageByDateRange(
         filters.from ?? new Date(0),
         filters.to ?? new Date(),
-        key.id,
+        filters.llmApiKeyId,
+        projectId,
       );
     }
-
-    return this.costUsageRepository.getCostAndUsageByKey(key.id);
+    return filters?.llmApiKeyId
+      ? this.costUsageRepository.getCostAndUsageByKey(filters.llmApiKeyId)
+      : this.costUsageRepository.getCostAndUsageByProject(projectId);
   }
 
   async getUsageByProvider(provider: string, startDate?: Date, endDate?: Date) {
