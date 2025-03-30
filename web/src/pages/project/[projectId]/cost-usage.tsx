@@ -10,7 +10,8 @@ import { type RouterOutputs } from "@/src/utils/api";
 import Header from "@/src/components/layouts/header";
 import { Card } from "@/src/components/ui/card";
 import { DateRangePicker } from "@/src/components/date-range-picker";
-import { type DateRange } from "@/src/components/date-range-picker";
+import type { DateRange } from "@/src/components/date-range-picker";
+import { TimePicker } from "@/src/components/ui/time-picker";
 import StatsCards from "@/src/components/stats-cards";
 import { PagedSettingsContainer } from "@/src/components/PagedSettingsContainer";
 import {
@@ -24,12 +25,16 @@ import {
 type RawUsageItem = {
   tokens: number;
   cost: number | null;
-  secretKey: string;
   provider: string;
   llmApiKeyId?: string;
+  displaySecretKey: string;
 };
 
-type UsageItem = RawUsageItem & {
+type UsageItem = {
+  tokens: number;
+  cost: number | null;
+  provider: string;
+  llmApiKeyId?: string;
   displaySecretKey: string;
 };
 
@@ -44,16 +49,21 @@ type UsageResponse = PaginatedUsageResponse | RawUsageItem | undefined;
 function normalizeUsageData(data: UsageResponse): UsageItem[] {
   if (!data) return [];
   if ("items" in data) {
-    return data.items.map((item: RawUsageItem) => ({
-      ...item,
-      displaySecretKey: `${item.secretKey.slice(0, 4)}...${item.secretKey.slice(-4)}`,
+    return data.items.map((item) => ({
+      tokens: item.tokens,
+      cost: item.cost,
+      provider: item.provider,
+      llmApiKeyId: item.llmApiKeyId,
+      displaySecretKey: item.displaySecretKey, // Convert secretKey to displaySecretKey
     }));
   }
-  const singleItem = data as RawUsageItem;
   return [
     {
-      ...singleItem,
-      displaySecretKey: `${singleItem.secretKey.slice(0, 4)}...${singleItem.secretKey.slice(-4)}`,
+      tokens: data.tokens,
+      cost: data.cost,
+      provider: data.provider,
+      llmApiKeyId: data.llmApiKeyId,
+      displaySecretKey: data.displaySecretKey, // Convert secretKey to displaySecretKey
     },
   ];
 }
@@ -74,19 +84,27 @@ export default function CostUsagePage() {
     scope: "llmApiKeys:read",
   });
 
-  const [dateRange, setDateRange] = useState<DateRange>({
-    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    to: new Date(),
-  });
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
   const [providerFilter, setProviderFilter] = useState<string>("all");
-  const [secretKeyFilter, setSecretKeyFilter] = useState<string>("");
+  const [secretKeyFilter, setSecretKeyFilter] = useState<string>("all");
+  const [dateError, setDateError] = useState<string | null>(null);
+
+  const allApiKeys = api.llmApiKeyUsage.list.useQuery(
+    { projectId },
+    { enabled: hasAccess },
+  );
+
+  const providers = api.llmApiKeyUsage.providers.useQuery(
+    { projectId },
+    { enabled: hasAccess },
+  );
 
   const apiKeys = api.llmApiKeyUsage.usage.useQuery(
     {
       projectId,
-      displaySecretKey: secretKeyFilter || "",
-      from: dateRange.from,
-      to: dateRange.to,
+      displaySecretKey: secretKeyFilter === "all" ? undefined : secretKeyFilter,
+      from: dateRange?.from,
+      to: dateRange?.to,
       provider: providerFilter === "all" ? undefined : providerFilter,
     },
     { enabled: hasAccess },
@@ -110,7 +128,9 @@ export default function CostUsagePage() {
       header: "Cost",
       cell: ({ row }) => {
         const cost = row.getValue<number | null>("cost");
-        return cost ? `$${cost.toFixed(4)}` : "-";
+        if (cost === null) return "-";
+        // Show more decimal places for very small values
+        return cost < 0.0001 ? `$${cost.toFixed(8)}` : `$${cost.toFixed(4)}`;
       },
     },
   ];
@@ -131,23 +151,109 @@ export default function CostUsagePage() {
       />
       <div className="flex-1 overflow-auto">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2">
+              <DateRangePicker
+                value={dateRange ?? undefined}
+                onChange={(range: DateRange | null) => {
+                  if (!range?.from || !range?.to) {
+                    setDateRange(null);
+                    setDateError(null);
+                    return;
+                  }
+
+                  // Validate date range
+                  if (range.from > range.to) {
+                    setDateError("Start date must be before end date");
+                    return;
+                  }
+
+                  // Validate custom range doesn't exceed 90 days
+                  const maxDays = 90;
+                  const diffDays = Math.ceil(
+                    (range.to.getTime() - range.from.getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  );
+                  if (diffDays > maxDays) {
+                    setDateError(`Date range cannot exceed ${maxDays} days`);
+                    return;
+                  }
+                  setDateError(null);
+
+                  // Store dates as-is (local time) but ensure backend handles them correctly
+                  setDateRange(range);
+                }}
+                showTime
+                presets={[
+                  {
+                    label: "Last 7 days",
+                    value: "7d",
+                  },
+                  {
+                    label: "Last 30 days",
+                    value: "30d",
+                    getDateRange: () => {
+                      const now = new Date();
+                      const from = new Date();
+                      from.setDate(now.getDate() - 30);
+                      from.setHours(0, 0, 0, 0); // Set to 12am
+                      return { from, to: now };
+                    },
+                  },
+                  {
+                    label: "Last 90 days",
+                    value: "90d",
+                    getDateRange: () => {
+                      const now = new Date();
+                      const from = new Date();
+                      from.setDate(now.getDate() - 90);
+                      from.setHours(0, 0, 0, 0); // Set to 12am
+                      return { from, to: now };
+                    },
+                  },
+                ]}
+              />
+              {dateRange && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">
+                    {dateRange.from.toLocaleString()} -{" "}
+                    {dateRange.to.toLocaleString()}
+                  </span>
+                  {dateError && (
+                    <span className="text-sm text-red-500">{dateError}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="flex gap-2">
-            <Input
-              placeholder="Filter by API Key"
-              value={secretKeyFilter}
-              onChange={(e) => setSecretKeyFilter(e.target.value)}
-              className="max-w-xs"
-            />
+            <Select value={secretKeyFilter} onValueChange={setSecretKeyFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All API Keys" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All API Keys</SelectItem>
+                {allApiKeys.data?.map((key: { displaySecretKey: string }) => (
+                  <SelectItem
+                    key={key.displaySecretKey}
+                    value={key.displaySecretKey}
+                  >
+                    {key.displaySecretKey}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={providerFilter} onValueChange={setProviderFilter}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="All Providers" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Providers</SelectItem>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="anthropic">Anthropic</SelectItem>
-                <SelectItem value="cohere">Cohere</SelectItem>
+                {providers.data?.map((provider) => (
+                  <SelectItem key={provider} value={provider}>
+                    {provider}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -160,7 +266,10 @@ export default function CostUsagePage() {
             },
             {
               name: "Total Cost",
-              value: `$${totals.totalCost.toFixed(4)}`,
+              value:
+                totals.totalCost < 0.0001
+                  ? `$${totals.totalCost.toFixed(8)}`
+                  : `$${totals.totalCost.toFixed(4)}`,
             },
           ]}
         />

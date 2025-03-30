@@ -8,7 +8,7 @@ import { getTimezoneDetails, getShortLocalTimezone } from "@/src/utils/dates";
 import { TimeIcon } from "@/src/components/ui/time-icon";
 import { cn } from "@/src/utils/tailwind";
 
-interface TimePickerProps {
+export interface TimePickerProps {
   date: Date | undefined;
   setDate: (date: Date | undefined) => void;
   className?: string;

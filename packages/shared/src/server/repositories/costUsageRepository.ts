@@ -21,7 +21,7 @@ export interface CostUsageRepository {
   ): Promise<{
     tokens: number;
     cost: number | null;
-    secretKey: string;
+    displaySecretKey: string;
     provider: string;
   }>;
 
@@ -34,7 +34,7 @@ export interface CostUsageRepository {
       llmApiKeyId: string;
       tokens: number;
       cost: number | null;
-      secretKey: string;
+      displaySecretKey: string;
       provider: string;
     }>;
     summaryCost: number;
@@ -52,7 +52,7 @@ export interface CostUsageRepository {
       llmApiKeyId: string;
       tokens: number;
       cost: number | null;
-      secretKey: string;
+      displaySecretKey: string;
       provider: string;
     }>;
     summaryCost: number;
@@ -69,7 +69,7 @@ export interface CostUsageRepository {
       llmApiKeyId: string;
       tokens: number;
       cost: number | null;
-      secretKey: string;
+      displaySecretKey: string;
       provider: string;
     }>;
     summaryCost: number;
@@ -124,7 +124,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
     return {
       tokens: parseInt(usage.tokens),
       cost: usage.cost ? parseFloat(usage.cost) : null,
-      secretKey: keyInfo?.displaySecretKey || "",
+      displaySecretKey: keyInfo?.displaySecretKey || "",
       provider: keyInfo?.provider || "",
     };
   }
@@ -186,7 +186,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
         llmApiKeyId: key.id,
         tokens,
         cost,
-        secretKey: key.displaySecretKey,
+        displaySecretKey: key.displaySecretKey,
         provider: key.provider,
       };
     });
@@ -260,7 +260,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
         llmApiKeyId: key.id,
         tokens,
         cost,
-        secretKey: key.displaySecretKey,
+        displaySecretKey: key.displaySecretKey,
         provider: key.provider,
       };
     });
@@ -341,7 +341,7 @@ export class CostUsageRepositoryImpl implements CostUsageRepository {
         llmApiKeyId: usage.llm_api_key_id,
         tokens,
         cost,
-        secretKey: key?.displaySecretKey || "",
+        displaySecretKey: key?.displaySecretKey || "",
         provider: key?.provider || "",
       };
     });
