@@ -39,7 +39,8 @@ export const userRouter = createTRPCRouter({
   all: protectedProjectProcedure
     .input(UserAllOptions)
     .query(async ({ input, ctx }) => {
-      const [users, totalUsers] = await Promise.all([
+      // First get user list and total count
+      const [userList, totalUsers] = await Promise.all([
         getTracesGroupedByUsers(
           ctx.session.projectId,
           input.filter ?? [],
@@ -55,11 +56,22 @@ export const userRouter = createTRPCRouter({
         ),
       ]);
 
+      // Then get metrics if needed
+      const metrics =
+        input.limit > 0
+          ? await getUserMetrics(
+              ctx.session.projectId,
+              userList.map((u) => u.user),
+              input.filter ?? [],
+            )
+          : [];
+
       return {
         totalUsers: totalUsers.shift()?.totalCount ?? 0,
-        users: users.map((user) => ({
+        users: userList.map((user) => ({
           userId: user.user,
           totalTraces: BigInt(user.count),
+          ...metrics.find((m) => m.userId === user.user),
         })),
       };
     }),
