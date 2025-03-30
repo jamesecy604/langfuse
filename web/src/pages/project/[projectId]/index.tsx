@@ -1,12 +1,7 @@
 import { useRouter } from "next/router";
-import { GenerationLatencyChart } from "@/src/features/dashboard/components/LatencyChart";
-import { ChartScores } from "@/src/features/dashboard/components/ChartScores";
-import { TracesBarListChart } from "@/src/features/dashboard/components/TracesBarListChart";
-import { ModelCostTable } from "@/src/features/dashboard/components/ModelCostTable";
-import { ScoresTable } from "@/src/features/dashboard/components/ScoresTable";
-import { ModelUsageChart } from "@/src/features/dashboard/components/ModelUsageChart";
-import { TracesAndObservationsTimeSeriesChart } from "@/src/features/dashboard/components/TracesTimeSeriesChart";
-import { UserChart } from "@/src/features/dashboard/components/UserChart";
+import dynamic from "next/dynamic";
+import { Suspense } from "react";
+import { Skeleton } from "@/src/components/ui/skeleton";
 import { DatePickerWithRange } from "@/src/components/date-picker";
 import { api } from "@/src/utils/api";
 import { FeedbackButtonWrapper } from "@/src/features/feedback/component/FeedbackButton";
@@ -16,13 +11,11 @@ import { PopoverFilterBuilder } from "@/src/features/filters/components/filter-b
 import { type FilterState } from "@langfuse/shared";
 import { type ColumnDefinition } from "@langfuse/shared";
 import { useQueryFilterState } from "@/src/features/filters/hooks/useFilterState";
-import { LatencyTables } from "@/src/features/dashboard/components/LatencyTables";
 import { useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { findClosestDashboardInterval } from "@/src/utils/date-range-utils";
 import { useDashboardDateRange } from "@/src/hooks/useDashboardDateRange";
 import { useDebounce } from "@/src/hooks/useDebounce";
-import { ScoreAnalytics } from "@/src/features/dashboard/components/score-analytics/ScoreAnalytics";
 import SetupTracingButton from "@/src/features/setup/components/SetupTracingButton";
 import { useEntitlementLimit } from "@/src/features/entitlements/hooks";
 import Page from "@/src/components/layouts/page";
@@ -31,6 +24,107 @@ import {
   convertSelectedEnvironmentsToFilter,
   useEnvironmentFilter,
 } from "@/src/hooks/use-environment-filter";
+
+const TracesBarListChart = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/TracesBarListChart").then(
+      (mod) => mod.TracesBarListChart,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const ModelCostTable = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/ModelCostTable").then(
+      (mod) => mod.ModelCostTable,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const ScoresTable = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/ScoresTable").then(
+      (mod) => mod.ScoresTable,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const TracesAndObservationsTimeSeriesChart = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/TracesTimeSeriesChart").then(
+      (mod) => mod.TracesAndObservationsTimeSeriesChart,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const ModelUsageChart = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/ModelUsageChart").then(
+      (mod) => mod.ModelUsageChart,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const UserChart = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/UserChart").then(
+      (mod) => mod.UserChart,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const ChartScores = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/ChartScores").then(
+      (mod) => mod.ChartScores,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const LatencyTables = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/LatencyTables").then(
+      (mod) => mod.LatencyTables,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const GenerationLatencyChart = dynamic(
+  () =>
+    import("@/src/features/dashboard/components/LatencyChart").then(
+      (mod) => mod.GenerationLatencyChart,
+    ),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
+const ScoreAnalytics = dynamic(
+  () =>
+    import(
+      "@/src/features/dashboard/components/score-analytics/ScoreAnalytics"
+    ).then((mod) => mod.ScoreAnalytics),
+  {
+    loading: () => <Skeleton className="h-[300px] w-full" />,
+    ssr: false,
+  },
+);
 
 export default function Dashboard() {
   const router = useRouter();
@@ -127,16 +221,15 @@ export default function Dashboard() {
     },
   ];
 
-  const agg = useMemo(
-    () =>
-      dateRange
-        ? (findClosestDashboardInterval(dateRange) ?? "7 days")
-        : "7 days",
-    [dateRange],
-  );
+  const agg = useMemo(() => {
+    if (!dateRange) return "7 days";
+    const interval = findClosestDashboardInterval(dateRange);
+    return interval ?? "7 days";
+  }, [dateRange]);
 
-  const timeFilter = dateRange
-    ? [
+  const timeFilter = useMemo(() => {
+    if (dateRange) {
+      return [
         {
           type: "datetime" as const,
           column: "startTime",
@@ -149,21 +242,23 @@ export default function Dashboard() {
           operator: "<" as const,
           value: dateRange.to,
         },
-      ]
-    : [
-        {
-          type: "datetime" as const,
-          column: "startTime",
-          operator: ">" as const,
-          value: new Date(new Date().getTime() - 1000),
-        },
-        {
-          type: "datetime" as const,
-          column: "startTime",
-          operator: "<" as const,
-          value: new Date(),
-        },
       ];
+    }
+    return [
+      {
+        type: "datetime" as const,
+        column: "startTime",
+        operator: ">" as const,
+        value: new Date(new Date().getTime() - 1000),
+      },
+      {
+        type: "datetime" as const,
+        column: "startTime",
+        operator: "<" as const,
+        value: new Date(),
+      },
+    ];
+  }, [dateRange]);
 
   const environmentFilter = convertSelectedEnvironmentsToFilter(
     ["environment"],

@@ -104,7 +104,7 @@ const MyApp: AppType<{ session: Session | null }> = ({
             <SessionProvider
               session={session}
               refetchOnWindowFocus={false}
-              refetchInterval={30 * 60} // 30 minutes
+              refetchInterval={5 * 60} // 5 minutes
               basePath={`${env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}
             >
               <DetailPageListsProvider>
