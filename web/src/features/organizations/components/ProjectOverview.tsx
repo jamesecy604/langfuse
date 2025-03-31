@@ -284,14 +284,14 @@ export const OrganizationProjectOverview = () => {
               placeholder="Search projects"
               onChange={(e) => setQueryParams({ search: e.target.value })}
             />
-            {canCreateOrg && (
+            {/* {canCreateOrg && (
               <Button data-testid="create-organization-btn" asChild>
                 <Link href={createOrganizationRoute}>
                   <PlusIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   New Organization
                 </Link>
               </Button>
-            )}
+            )} */}
           </>
         ),
       }}

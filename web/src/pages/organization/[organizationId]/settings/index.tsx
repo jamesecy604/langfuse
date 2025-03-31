@@ -6,8 +6,8 @@ import { JSONView } from "@/src/components/ui/CodeJsonViewer";
 import RenameOrganization from "@/src/features/organizations/components/RenameOrganization";
 import { useQueryOrganization } from "@/src/features/organizations/hooks";
 import { useRouter } from "next/router";
-import { SettingsDangerZone } from "@/src/components/SettingsDangerZone";
-import { DeleteOrganizationButton } from "@/src/features/organizations/components/DeleteOrganizationButton";
+//import { SettingsDangerZone } from "@/src/components/SettingsDangerZone";
+//import { DeleteOrganizationButton } from "@/src/features/organizations/components/DeleteOrganizationButton";
 
 import { useHasEntitlement } from "@/src/features/entitlements/hooks";
 import ContainerPage from "@/src/components/layouts/container-page";
@@ -53,7 +53,7 @@ export const getOrganizationSettingsPages = ({
             json={{ name: organization.name, id: organization.id }}
           />
         </div>
-        <SettingsDangerZone
+        {/* <SettingsDangerZone
           items={[
             {
               title: "Delete this organization",
@@ -62,7 +62,7 @@ export const getOrganizationSettingsPages = ({
               button: <DeleteOrganizationButton />,
             },
           ]}
-        />
+        /> */}
       </div>
     ),
   },

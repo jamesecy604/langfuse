@@ -18,7 +18,7 @@ export function GeneralSettings({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <HostNameProject />
+      {/* <HostNameProject /> */}
       <RenameProject />
       {showRetentionSettings && <ConfigureRetention />}
       <div>
@@ -33,12 +33,12 @@ export function GeneralSettings({
       </div>
       <SettingsDangerZone
         items={[
-          {
-            title: "Transfer ownership",
-            description:
-              "Transfer this project to another organization where you have the ability to create projects.",
-            button: <TransferProjectButton />,
-          },
+          // {
+          //   title: "Transfer ownership",
+          //   description:
+          //     "Transfer this project to another organization where you have the ability to create projects.",
+          //   button: <TransferProjectButton />,
+          // },
           {
             title: "Delete this project",
             description:
