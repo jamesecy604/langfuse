@@ -19,11 +19,24 @@ import {
 import { randomUUID } from "crypto";
 
 export const projectsRouter = createTRPCRouter({
+  hasDefault: protectedOrganizationProcedure
+    .input(z.object({ orgId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const defaultProject = await ctx.prisma.project.findFirst({
+        where: {
+          orgId: input.orgId,
+          isDefault: true,
+        },
+      });
+      return Boolean(defaultProject);
+    }),
+
   create: protectedOrganizationProcedure
     .input(
       z.object({
-        name: z.string(),
+        name: projectNameSchema.shape.name,
         orgId: z.string(),
+        isDefault: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -47,11 +60,11 @@ export const projectsRouter = createTRPCRouter({
             "A project with this name already exists in your organization",
         });
       }
-
       const project = await ctx.prisma.project.create({
         data: {
           name: input.name,
           orgId: input.orgId,
+          isDefault: input.isDefault ?? false,
         },
       });
       await auditLog({
@@ -74,6 +87,7 @@ export const projectsRouter = createTRPCRouter({
       z.object({
         projectId: z.string(),
         newName: projectNameSchema.shape.name,
+        isDefault: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -90,6 +104,7 @@ export const projectsRouter = createTRPCRouter({
         },
         data: {
           name: input.newName,
+          isDefault: input.isDefault,
         },
       });
       await auditLog({

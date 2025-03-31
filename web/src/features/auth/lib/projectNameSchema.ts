@@ -9,4 +9,5 @@ export const projectNameSchema = z.object({
     .refine((value) => noHtmlCheck(value), {
       message: "Input should not contain HTML",
     }),
+  isDefault: z.boolean().default(false),
 });

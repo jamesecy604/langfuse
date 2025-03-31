@@ -11,12 +11,13 @@ import {
   FormMessage,
 } from "@/src/components/ui/form";
 import { Input } from "@/src/components/ui/input";
-import { api } from "@/src/utils/api";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { chatRunTrigger } from "@/src/features/support-chat/chat";
 import { projectNameSchema } from "@/src/features/auth/lib/projectNameSchema";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
+import { Checkbox } from "@/src/components/ui/checkbox";
+import { api } from "@/src/utils/api";
 
 export const NewProjectForm = ({
   orgId,
@@ -25,13 +26,24 @@ export const NewProjectForm = ({
   orgId: string;
   onSuccess: (projectId: string) => void;
 }) => {
+  const { data: hasDefaultProject } = api.projects.hasDefault.useQuery(
+    {
+      orgId,
+    },
+    {
+      enabled: !!orgId,
+    },
+  );
   const capture = usePostHogClientCapture();
   const { update: updateSession } = useSession();
 
-  const form = useForm<z.infer<typeof projectNameSchema>>({
+  const form = useForm<
+    z.infer<typeof projectNameSchema> & { isDefault: boolean }
+  >({
     resolver: zodResolver(projectNameSchema),
     defaultValues: {
       name: "",
+      isDefault: false,
     },
   });
   const router = useRouter();
@@ -43,12 +55,15 @@ export const NewProjectForm = ({
     onError: (error) => form.setError("name", { message: error.message }),
   });
 
-  function onSubmit(values: z.infer<typeof projectNameSchema>) {
+  function onSubmit(
+    values: z.infer<typeof projectNameSchema> & { isDefault: boolean },
+  ) {
     capture("projects:new_form_submit");
     createProjectMutation
       .mutateAsync({
         name: values.name,
         orgId,
+        isDefault: values.isDefault,
       })
       .then((project) => {
         onSuccess(project.id);
@@ -84,6 +99,25 @@ export const NewProjectForm = ({
             </FormItem>
           )}
         />
+        {!hasDefaultProject && (
+          <FormField
+            control={form.control}
+            name="isDefault"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel>Set as default project</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+        )}
         <Button type="submit" loading={createProjectMutation.isLoading}>
           Create
         </Button>

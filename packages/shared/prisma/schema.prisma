@@ -143,6 +143,7 @@ model Project {
   deletedAt           DateTime?                 @map("deleted_at")
   name                String
   retentionDays       Int?                      @map("retention_days")
+  isDefault           Boolean                   @default(false) @map("is_default")
   projectMembers      ProjectMembership[]
   organization        Organization              @relation(fields: [orgId], references: [id], onUpdate: Cascade, onDelete: Cascade)
   apiKeys             ApiKey[]

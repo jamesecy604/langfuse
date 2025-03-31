@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from "@/src/components/ui/form";
 import { projectNameSchema } from "@/src/features/auth/lib/projectNameSchema";
+import { Checkbox } from "@/src/components/ui/checkbox";
 import Header from "@/src/components/layouts/header";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
 import { LockIcon } from "lucide-react";
@@ -29,10 +30,13 @@ export default function RenameProject() {
     scope: "project:update",
   });
 
-  const form = useForm<z.infer<typeof projectNameSchema>>({
+  const form = useForm<
+    z.infer<typeof projectNameSchema> & { isDefault: boolean }
+  >({
     resolver: zodResolver(projectNameSchema),
     defaultValues: {
       name: "",
+      isDefault: project?.isDefault ?? false,
     },
   });
   const renameProject = api.projects.update.useMutation({
@@ -45,10 +49,12 @@ export default function RenameProject() {
   function onSubmit(values: z.infer<typeof projectNameSchema>) {
     if (!hasAccess || !project) return;
     capture("project_settings:rename_form_submit");
+    if (!values.name || values.name === project?.name) return;
     renameProject
       .mutateAsync({
         projectId: project.id,
         newName: values.name,
+        isDefault: values.isDefault,
       })
       .then(() => {
         form.reset();
@@ -64,16 +70,13 @@ export default function RenameProject() {
       <Card className="mb-4 p-3">
         {form.getValues().name !== "" ? (
           <p className="mb-4 text-sm text-primary">
-            Your Project will be renamed from &quot;
-            {project?.name ?? ""}
-            &quot; to &quot;
-            <b>{form.watch().name}</b>&quot;.
+            Your Project will be renamed from "{project?.name ?? ""}" to "
+            <b>{form.watch().name}</b>".
           </p>
         ) : (
           <p className="mb-4 text-sm text-primary">
-            Your Project is currently named &quot;
-            <b>{project?.name ?? ""}</b>
-            &quot;.
+            Your Project is currently named "<b>{project?.name ?? ""}</b>
+            ".
           </p>
         )}
         <Form {...form}>
@@ -108,15 +111,49 @@ export default function RenameProject() {
               )}
             />
             {hasAccess && (
-              <Button
-                variant="secondary"
-                type="submit"
-                loading={renameProject.isLoading}
-                disabled={form.getValues().name === "" || !hasAccess}
-                className="mt-4"
-              >
-                Save
-              </Button>
+              <>
+                <FormField
+                  control={form.control}
+                  name="isDefault"
+                  render={({ field }) => (
+                    <FormItem className="mt-4 flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!hasAccess || !project?.isDefault}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <label className="text-sm font-medium leading-none">
+                          Default Project
+                        </label>
+                        <p className="text-sm text-muted-foreground">
+                          {project?.isDefault
+                            ? "Uncheck to remove default status"
+                            : "Only default projects can change this setting"}
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  variant="secondary"
+                  type="submit"
+                  loading={renameProject.isLoading}
+                  disabled={
+                    !(
+                      (form.getValues().name !== "" ||
+                        (form.getValues().isDefault !== project?.isDefault &&
+                          form.getValues().name !== "")) &&
+                      hasAccess
+                    )
+                  }
+                  className="mt-6"
+                >
+                  Save
+                </Button>
+              </>
             )}
           </form>
         </Form>
