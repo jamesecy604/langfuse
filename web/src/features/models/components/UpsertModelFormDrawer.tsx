@@ -41,6 +41,7 @@ import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePos
 import { api } from "@/src/utils/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/router";
+import { Decimal } from "decimal.js";
 
 import { PricePreview } from "./PricePreview";
 import { showSuccessToast } from "@/src/features/notifications/showSuccessToast";
@@ -127,8 +128,8 @@ export const UpsertModelFormDrawer = ({
   }, [modelName, matchPattern, form]);
 
   const upsertModelMutation = api.models.upsert.useMutation({
-    onSuccess: (upsertedModel) => {
-      utils.models.invalidate();
+    onSuccess: async (upsertedModel) => {
+      await utils.models.invalidate();
       form.reset();
       setOpen(false);
       showSuccessToast({
@@ -142,11 +143,24 @@ export const UpsertModelFormDrawer = ({
     onError: (error) => setFormError(error.message),
   });
 
+  const mutSyncModel = api.cachedModels.syncModels.useMutation({
+    onSuccess: () => {
+      void utils.cachedModels.invalidate();
+    },
+    onError: (error) => {
+      if (error.message.includes("displaySecretKey")) {
+        setFormError(
+          "Failed to sync model to Redis. Please try again or contact support.",
+        );
+      }
+    },
+  });
+
   const onSubmit = async (values: FormUpsertModel) => {
     capture("models:new_form_submit");
 
-    await upsertModelMutation
-      .mutateAsync({
+    try {
+      const upsertedModel = await upsertModelMutation.mutateAsync({
         modelId: props.action === "edit" ? props.modelData.id : null,
         projectId: props.projectId,
         modelName: values.modelName,
@@ -158,10 +172,29 @@ export const UpsertModelFormDrawer = ({
           typeof JSON.parse(values.tokenizerConfig) === "object"
             ? (JSON.parse(values.tokenizerConfig) as Record<string, number>)
             : undefined,
-      })
-      .catch((error) => {
-        setFormError(error.message);
       });
+
+      await mutSyncModel.mutateAsync({
+        ...upsertedModel,
+        projectId: props.projectId,
+        inputPrice: upsertedModel.inputPrice
+          ? new Decimal(upsertedModel.inputPrice)
+          : null,
+        outputPrice: upsertedModel.outputPrice
+          ? new Decimal(upsertedModel.outputPrice)
+          : null,
+        totalPrice: upsertedModel.totalPrice
+          ? new Decimal(upsertedModel.totalPrice)
+          : null,
+        tokenizerConfig: upsertedModel.tokenizerConfig ?? {},
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setFormError(error.message);
+      } else {
+        setFormError("An unknown error occurred");
+      }
+    }
   };
 
   return (

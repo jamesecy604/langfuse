@@ -3,6 +3,7 @@ import "./initialize";
 import express from "express";
 import cors from "cors";
 import * as middlewares from "./middlewares";
+import { ModelAndLlmApiKeyInitService } from "../../packages/shared/src/server/services/modelAndLlmApiKeyInitService";
 import api from "./api";
 import MessageResponse from "./interfaces/MessageResponse";
 
@@ -35,6 +36,18 @@ import { BalanceWorkerService } from "./services/BalanceWorkerService";
 import { TokenUsageWorkerService } from "./services/TokenUsageWorkerService";
 
 const app = express();
+
+// Initialize caches before setting up the app
+(async () => {
+  try {
+    const initService = new ModelAndLlmApiKeyInitService();
+    await initService.initialize();
+    logger.info("Successfully initialized model and LLM API key caches");
+  } catch (error) {
+    logger.error("Failed to initialize model and LLM API key caches", error);
+    process.exit(1);
+  }
+})();
 
 app.use(helmet());
 app.use(cors());

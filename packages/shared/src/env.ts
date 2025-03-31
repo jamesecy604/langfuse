@@ -50,10 +50,7 @@ const EnvSchema = z.object({
   ENABLE_AWS_CLOUDWATCH_METRIC_PUBLISHING: z
     .enum(["true", "false"])
     .default("false"),
-  LANGFUSE_S3_CONCURRENT_WRITES: z.coerce
-    .number()
-    .positive()
-    .default(50),
+  LANGFUSE_S3_CONCURRENT_WRITES: z.coerce.number().positive().default(50),
   LANGFUSE_S3_EVENT_UPLOAD_BUCKET: z.string({
     required_error: "Langfuse requires a bucket name for S3 Event Uploads.",
   }),
@@ -75,9 +72,10 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("false"),
 
-  LANGFUSE_CUSTOM_SSO_EMAIL_CLAIM: z.string().default('email'),
-  LANGFUSE_CUSTOM_SSO_NAME_CLAIM: z.string().default('name'),
-  LANGFUSE_CUSTOM_SSO_SUB_CLAIM: z.string().default('sub'),
+  LANGFUSE_CUSTOM_SSO_EMAIL_CLAIM: z.string().default("email"),
+  LANGFUSE_CUSTOM_SSO_NAME_CLAIM: z.string().default("name"),
+  LANGFUSE_CUSTOM_SSO_SUB_CLAIM: z.string().default("sub"),
+  TABLE_CACHE_TTL: z.coerce.number().default(3600),
 });
 
 export const env: z.infer<typeof EnvSchema> =

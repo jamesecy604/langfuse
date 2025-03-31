@@ -85,7 +85,15 @@ export function CreateLLMApiKeyForm({
   );
 
   const mutCreateLlmApiKey = api.llmApiKey.create.useMutation({
-    onSuccess: () => utils.llmApiKey.invalidate(),
+    onSuccess: () => {
+      return Promise.all([utils.llmApiKey.invalidate()]);
+    },
+  });
+
+  const mutSyncLlmApiKey = api.cachedModels.syncApiKeys.useMutation({
+    onSuccess: () => {
+      return Promise.all([utils.cachedModels.invalidate()]);
+    },
   });
 
   const mutTestLLMApiKey = api.llmApiKey.test.useMutation();
@@ -196,6 +204,35 @@ export function CreateLLMApiKeyForm({
 
       return;
     }
+
+    const syncKey = {
+      ...newKey,
+      id: "", // Will be set by the cache service
+      displaySecretKey: newKey.secretKey,
+      baseURL: newKey.baseURL ?? null, // Convert undefined to null
+      extraHeaders: newKey.extraHeaders
+        ? JSON.stringify(newKey.extraHeaders)
+        : null,
+      extraHeaderKeys: newKey.extraHeaders
+        ? Object.keys(newKey.extraHeaders)
+        : [],
+      config: newKey.config ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    mutSyncLlmApiKey
+      .mutateAsync(syncKey)
+      .then(() => {})
+      .catch((error) => {
+        console.error(error);
+        if (error.message.includes("displaySecretKey")) {
+          form.setError("secretKey", {
+            type: "manual",
+            message: "sync fails",
+          });
+        }
+      });
 
     return mutCreateLlmApiKey
       .mutateAsync(newKey)

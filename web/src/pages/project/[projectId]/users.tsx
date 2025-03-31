@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import {
   NumberParam,
   StringParam,
@@ -30,13 +30,6 @@ import {
 } from "@/src/hooks/use-environment-filter";
 import { Badge } from "@/src/components/ui/badge";
 
-type UserRow = RouterOutput["users"]["all"]["users"][number] & {
-  totalTraces?: number;
-  observationCount?: number;
-  totalUsage?: number;
-  totalCost?: number;
-};
-
 type RowData = {
   userId: string;
   environment?: string;
@@ -47,22 +40,43 @@ type RowData = {
   totalCost: string;
 };
 
-const safeToNumber = (value: unknown): number | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === "bigint") {
-    return Number(value);
-  }
-  if (typeof value === "number") {
-    return value;
-  }
-  if (typeof value === "string") {
-    const num = Number(value);
-    return isNaN(num) ? null : num;
-  }
-  return null;
-};
+export default function UsersPage() {
+  const router = useRouter();
+  const projectId = router.query.projectId as string;
+
+  // Check if the user has any users
+  const { data: hasAnyUser, isLoading } = api.users.hasAny.useQuery(
+    { projectId },
+    {
+      enabled: !!projectId,
+      trpc: {
+        context: {
+          skipBatch: true,
+        },
+      },
+      refetchInterval: 10_000,
+    },
+  );
+
+  const showOnboarding = !isLoading && !hasAnyUser;
+
+  return (
+    <Page
+      headerProps={{
+        title: "Users",
+        help: {
+          description:
+            "Attribute data in Langfuse to a user by adding a userId to your traces. See docs to learn more.",
+          href: "https://langfuse.com/docs/user-explorer",
+        },
+      }}
+      scrollable={showOnboarding}
+    >
+      {/* Show onboarding screen if user has no users */}
+      {showOnboarding ? <UsersOnboarding /> : <UsersTable />}
+    </Page>
+  );
+}
 
 const UsersTable = () => {
   const router = useRouter();
@@ -103,7 +117,7 @@ const UsersTable = () => {
         refetchOnMount: false,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
-        staleTime: 60 * 60 * 1000, // 1 hour cache
+        staleTime: Infinity,
       },
     );
 
@@ -128,142 +142,195 @@ const UsersTable = () => {
     withDefault(StringParam, null),
   );
 
-  const users = api.users.all.useQuery(
+  const users = api.users.all.useQuery({
+    filter: filterState,
+    page: paginationState.pageIndex,
+    limit: paginationState.pageSize,
+    projectId,
+    searchQuery: searchQuery ?? undefined,
+  });
+
+  // this API call will return an empty array if there are no users.
+  // Hence, this adds one fast unnecessary API call if there are no users.
+  const userMetrics = api.users.metrics.useQuery(
     {
       projectId,
+      userIds: users.data?.users.map((u) => u.userId) ?? [],
       filter: filterState,
-      page: paginationState.pageIndex,
-      limit: paginationState.pageSize,
-      searchQuery: searchQuery ?? undefined,
     },
     {
-      keepPreviousData: true,
+      enabled: users.isSuccess,
+      trpc: {
+        context: {
+          skipBatch: true,
+        },
+      },
     },
   );
 
-  const userRowData = users.data?.users ?? [];
-  const totalCount = safeToNumber(users.data?.totalUsers) ?? 0;
+  type UserCoreOutput = RouterOutput["users"]["all"]["users"][number];
+  type UserMetricsOutput = RouterOutput["users"]["metrics"][number];
 
-  const columns = useMemo<LangfuseColumnDef<RowData>[]>(
-    () => [
-      {
-        accessorKey: "userId",
-        enableColumnFilter: true,
-        header: "User ID",
-        headerTooltip: {
-          description:
-            "The unique identifier for the user that was logged in Langfuse. See docs for more details on how to set this up.",
-          href: "https://langfuse.com/docs/tracing-features/users",
-        },
-        size: 150,
-        cell: ({ row }) => {
-          const value: RowData["userId"] = row.getValue("userId");
-          return typeof value === "string" ? (
+  type CoreType = Omit<UserCoreOutput, "userId"> & { id: string };
+  type MetricType = Omit<UserMetricsOutput, "userId"> & { id: string };
+
+  const userRowData = joinTableCoreAndMetrics<CoreType, MetricType>(
+    users.data?.users.map((u) => ({
+      ...u,
+      id: u.userId,
+    })),
+    userMetrics.data?.map((u) => ({
+      ...u,
+      id: u.userId,
+    })),
+  );
+
+  const totalCount = users.data?.totalUsers
+    ? Number(users.data.totalUsers)
+    : null;
+
+  useEffect(() => {
+    if (users.isSuccess) {
+      setDetailPageList(
+        "users",
+        users.data.users.map((u) => ({ id: encodeURIComponent(u.userId) })),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [users.isSuccess, users.data]);
+
+  const columns: LangfuseColumnDef<RowData>[] = [
+    {
+      accessorKey: "userId",
+      enableColumnFilter: true,
+      header: "User ID",
+      headerTooltip: {
+        description:
+          "The unique identifier for the user that was logged in Langfuse. See docs for more details on how to set this up.",
+        href: "https://langfuse.com/docs/tracing-features/users",
+      },
+      size: 150,
+      cell: ({ row }) => {
+        const value: RowData["userId"] = row.getValue("userId");
+        return typeof value === "string" ? (
+          <>
             <TableLink
               path={`/project/${projectId}/users/${encodeURIComponent(value)}`}
               value={value}
             />
-          ) : undefined;
-        },
+          </>
+        ) : undefined;
       },
-      {
-        accessorKey: "environment",
-        header: "Environment",
-        id: "environment",
-        size: 150,
-        enableHiding: true,
-        cell: ({ row }) => {
-          const value: RowData["environment"] = row.getValue("environment");
-          return value ? (
-            <Badge
-              variant="secondary"
-              className="max-w-fit truncate rounded-sm px-1 font-normal"
-            >
-              {value}
-            </Badge>
-          ) : null;
-        },
+    },
+    {
+      accessorKey: "environment",
+      header: "Environment",
+      id: "environment",
+      size: 150,
+      enableHiding: true,
+      cell: ({ row }) => {
+        const value: RowData["environment"] = row.getValue("environment");
+        return value ? (
+          <Badge
+            variant="secondary"
+            className="max-w-fit truncate rounded-sm px-1 font-normal"
+          >
+            {value}
+          </Badge>
+        ) : null;
       },
-      {
-        accessorKey: "firstEvent",
-        header: "First Event",
-        headerTooltip: {
-          description: "The earliest trace recorded for this user.",
-        },
-        size: 150,
-        cell: ({ row }) => {
-          const value: RowData["firstEvent"] = row.getValue("firstEvent");
-          return typeof value === "string" ? <>{value}</> : null;
-        },
+    },
+    {
+      accessorKey: "firstEvent",
+      header: "First Event",
+      headerTooltip: {
+        description: "The earliest trace recorded for this user.",
       },
-      {
-        accessorKey: "lastEvent",
-        header: "Last Event",
-        headerTooltip: {
-          description: "The latest trace recorded for this user.",
-        },
-        size: 150,
-        cell: ({ row }) => {
-          const value: RowData["lastEvent"] = row.getValue("lastEvent");
-          return typeof value === "string" ? <>{value}</> : null;
-        },
+      size: 150,
+      cell: ({ row }) => {
+        const value: RowData["firstEvent"] = row.getValue("firstEvent");
+        if (!userMetrics.isSuccess) {
+          return <Skeleton className="h-3 w-1/2" />;
+        }
+        if (typeof value === "string") {
+          return <>{value}</>;
+        }
       },
-      {
-        accessorKey: "totalEvents",
-        header: "Total Events",
-        headerTooltip: {
-          description:
-            "Total number of events for the user, includes traces and observations. See data model for more details.",
-          href: "https://langfuse.com/docs/tracing-data-model",
-        },
-        size: 120,
-        cell: ({ row }) => {
-          const value: RowData["totalEvents"] = row.getValue("totalEvents");
-          return typeof value === "string" ? (
-            <>{value}</>
-          ) : (
-            <Skeleton className="h-3 w-1/2" />
-          );
-        },
+    },
+    {
+      accessorKey: "lastEvent",
+      header: "Last Event",
+      headerTooltip: {
+        description: "The latest trace recorded for this user.",
       },
-      {
-        accessorKey: "totalTokens",
-        header: "Total Tokens",
-        headerTooltip: {
-          description:
-            "Total number of tokens used for the user across all generations.",
-          href: "https://langfuse.com/docs/model-usage-and-cost",
-        },
-        size: 120,
-        cell: ({ row }) => {
-          const value: RowData["totalTokens"] = row.getValue("totalTokens");
-          return typeof value === "string" ? (
-            <>{value}</>
-          ) : (
-            <Skeleton className="h-3 w-1/2" />
-          );
-        },
+      size: 150,
+      cell: ({ row }) => {
+        const value: RowData["lastEvent"] = row.getValue("lastEvent");
+        if (!userMetrics.isSuccess) {
+          return <Skeleton className="h-3 w-1/2" />;
+        }
+        if (typeof value === "string") {
+          return <>{value}</>;
+        }
       },
-      {
-        accessorKey: "totalCost",
-        header: "Total Cost",
-        headerTooltip: {
-          description: "Total cost for the user across all generations.",
-          href: "https://langfuse.com/docs/model-usage-and-cost",
-        },
-        size: 120,
-        cell: ({ row }) => {
-          const value: RowData["totalCost"] = row.getValue("totalCost");
-          return typeof value === "string" ? (
-            <>{value}</>
-          ) : (
-            <Skeleton className="h-3 w-1/2" />
-          );
-        },
+    },
+    {
+      accessorKey: "totalEvents",
+      header: "Total Events",
+      headerTooltip: {
+        description:
+          "Total number of events for the user, includes traces and observations. See data model for more details.",
+        href: "https://langfuse.com/docs/tracing-data-model",
       },
-    ],
-    [projectId],
-  );
+      size: 120,
+      cell: ({ row }) => {
+        const value: RowData["totalEvents"] = row.getValue("totalEvents");
+        if (!userMetrics.isSuccess) {
+          return <Skeleton className="h-3 w-1/2" />;
+        }
+        if (typeof value === "string") {
+          return <>{value}</>;
+        }
+      },
+    },
+    {
+      accessorKey: "totalTokens",
+      header: "Total Tokens",
+      headerTooltip: {
+        description:
+          "Total number of tokens used for the user across all generations.",
+        href: "https://langfuse.com/docs/model-usage-and-cost",
+      },
+      size: 120,
+      cell: ({ row }) => {
+        const value: RowData["totalTokens"] = row.getValue("totalTokens");
+        if (!userMetrics.isSuccess) {
+          return <Skeleton className="h-3 w-1/2" />;
+        }
+        if (typeof value === "string") {
+          return <>{value}</>;
+        }
+      },
+    },
+    {
+      accessorKey: "totalCost",
+      header: "Total Cost",
+      headerTooltip: {
+        description: "Total cost for the user across all generations.",
+        href: "https://langfuse.com/docs/model-usage-and-cost",
+      },
+      size: 120,
+      cell: ({ row }) => {
+        const value: RowData["totalCost"] = row.getValue("totalCost");
+        if (!userMetrics.isSuccess) {
+          return <Skeleton className="h-3 w-1/2" />;
+        }
+        if (typeof value === "string") {
+          return <>{value}</>;
+        }
+      },
+    },
+  ];
 
   return (
     <>
@@ -299,25 +366,24 @@ const UsersTable = () => {
               : {
                   isLoading: false,
                   isError: false,
-                  data: userRowData.map((user) => {
-                    const totalTraces = safeToNumber(user.totalTraces) ?? 0;
-                    const observationCount =
-                      safeToNumber(user.observationCount) ?? 0;
-                    const totalUsage = safeToNumber(user.totalUsage) ?? 0;
-                    const totalCost = safeToNumber(user.totalCost) ?? 0;
-
-                    const totalEvents = totalTraces + observationCount;
-
+                  data: userRowData.rows?.map((t) => {
                     return {
-                      userId: user.userId,
-                      environment: user.environment ?? undefined,
+                      userId: t.id,
+                      environment: t.environment ?? undefined,
                       firstEvent:
-                        user.minTimestamp?.toLocaleString() ?? "No event yet",
+                        t.firstTrace?.toLocaleString() ?? "No event yet",
                       lastEvent:
-                        user.maxTimestamp?.toLocaleString() ?? "No event yet",
-                      totalEvents: compactNumberFormatter(totalEvents),
-                      totalTokens: compactNumberFormatter(totalUsage),
-                      totalCost: usdFormatter(safeToNumber(totalCost) ?? 0),
+                        t.lastTrace?.toLocaleString() ?? "No event yet",
+                      totalEvents: compactNumberFormatter(
+                        Number(t.totalTraces ?? 0) +
+                          Number(t.totalObservations ?? 0),
+                      ),
+                      totalTokens: compactNumberFormatter(t.totalTokens ?? 0),
+                      totalCost: usdFormatter(
+                        t.sumCalculatedTotalCost ?? 0,
+                        2,
+                        2,
+                      ),
                     };
                   }),
                 }
@@ -331,5 +397,3 @@ const UsersTable = () => {
     </>
   );
 };
-
-export default UsersTable;

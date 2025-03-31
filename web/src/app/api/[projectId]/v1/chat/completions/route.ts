@@ -13,6 +13,7 @@ import { ApiAuthService } from "@/src/features/public-api/server/apiAuth";
 import { redis } from "@langfuse/shared/src/server";
 import { BalanceService } from "../../../../../../../../packages/shared/src/server/services/balanceService";
 import { TokenUsageService } from "../../../../../../../../packages/shared/src/server/services/tokenUsageService";
+import { ModelCacheService } from "../../../../../../../../packages/shared/src/server/redis/modelCache";
 
 export async function POST(
   request: Request,
@@ -120,22 +121,13 @@ export async function POST(
     const { model, messages, temperature, stream } = body;
 
     // Initialize OpenAI API
-    // Get model configuration
-    const modelConfig = await prisma.model.findFirst({
-      where: {
-        projectId: params.projectId,
-        modelName: body.model,
-      },
-      include: {
-        Price: {
-          where: {
-            usageType: {
-              in: ["input", "output"],
-            },
-          },
-        },
-      },
-    });
+    // Get model configuration from cache
+    const cache = new ModelCacheService();
+    const models = await cache.getCachedModels(params.projectId);
+
+    const modelConfig = models?.find(
+      (m: { modelName: string }) => m.modelName === body.model,
+    );
 
     if (!modelConfig) {
       return NextResponse.json(
@@ -154,38 +146,25 @@ export async function POST(
       );
     }
 
-    // Get all LLM API keys for the project
-    const llmApiKeys = await prisma.llmApiKeys.findMany({
-      where: {
-        projectId: modelConfig.projectId,
-      },
-      select: {
-        id: true,
-        secretKey: true,
-        provider: true,
-        adapter: true,
-        customModels: true,
-        withDefaultModels: true,
-        baseURL: true,
-      },
-    });
+    const llmApiKeys = await cache.getCachedApiKeys(params.projectId);
 
+    if (!llmApiKeys) {
+      return NextResponse.json(
+        { error: "Not able to find LLM Api key" },
+        { status: 500 },
+      );
+    }
     // Filter keys that support the requested model
-    const supportedKeys = llmApiKeys.filter((key) => {
-      // Check if model is in custom models
-      if (key.customModels.includes(model)) {
-        return true;
-      }
+    const supportedKeys = llmApiKeys.filter(
+      (key: { customModels: string[] }) => {
+        // Check if model is in custom models
+        if (key.customModels.includes(model)) {
+          return true;
+        }
 
-      // // Check if provider supports model by default
-      // if (key.withDefaultModels) {
-      //   // TODO: Implement provider-specific model validation
-      //   // For now assume all default models are supported
-      //   return true;
-      // }
-
-      return false;
-    });
+        return false;
+      },
+    );
 
     if (!supportedKeys.length) {
       return NextResponse.json(
@@ -198,9 +177,9 @@ export async function POST(
 
     // Choose API key with least usage
     const llmApiKeyId = await tokenUsageService.chooseLLMApiKeyId(
-      supportedKeys.map((k) => k.id),
+      supportedKeys.map((k: { id: string }) => k.id),
     );
-    console.log("===============================choosed", llmApiKeyId);
+
     if (!llmApiKeyId) {
       return NextResponse.json(
         { error: "Failed to select API key" },
@@ -208,7 +187,9 @@ export async function POST(
       );
     }
 
-    const llmConfig = llmApiKeys.find((k) => k.id === llmApiKeyId);
+    const llmConfig = llmApiKeys.find(
+      (k: { id: string }) => k.id === llmApiKeyId,
+    );
 
     if (!llmConfig) {
       return NextResponse.json(
@@ -220,7 +201,9 @@ export async function POST(
     }
 
     // Decrypt the API key
-    const decryptedKey = await decrypt(llmConfig.secretKey);
+    const decryptedKey = await decrypt(
+      "119a937918ee36ab0b206e00:d25cd84deebe86be473f55d1a55fb2ca94cd95264198a668657c86e2b86bdec7b748c3:8d7a077807fa4812f2650afe6e8265b5",
+    );
     if (!decryptedKey) {
       return NextResponse.json(
         { error: "Failed to decrypt API key" },
@@ -230,7 +213,7 @@ export async function POST(
 
     const api = new OpenAI({
       apiKey: decryptedKey,
-      baseURL: llmConfig.baseURL,
+      baseURL: "https://api.deepseek.com",
     });
 
     if (stream) {
@@ -292,18 +275,21 @@ export async function POST(
 
             // End generation with final output using accumulated usage
             const inputPrice = modelConfig.Price?.find(
-              (p) => p.usageType === "input",
+              (p: { usageType: string }) => p.usageType === "input",
             )?.price
               ? Number(
-                  modelConfig.Price.find((p) => p.usageType === "input")?.price,
+                  modelConfig.Price.find(
+                    (p: { usageType: string }) => p.usageType === "input",
+                  )?.price,
                 )
               : 0;
             const outputPrice = modelConfig.Price?.find(
-              (p) => p.usageType === "output",
+              (p: { usageType: string }) => p.usageType === "output",
             )?.price
               ? Number(
-                  modelConfig.Price.find((p) => p.usageType === "output")
-                    ?.price,
+                  modelConfig.Price.find(
+                    (p: { usageType: string }) => p.usageType === "output",
+                  )?.price,
                 )
               : 0;
 
@@ -405,17 +391,21 @@ export async function POST(
 
         // Track completion response with full details
         const inputPrice = modelConfig.Price?.find(
-          (p) => p.usageType === "input",
+          (p: { usageType: string }) => p.usageType === "input",
         )?.price
           ? Number(
-              modelConfig.Price.find((p) => p.usageType === "input")?.price,
+              modelConfig.Price.find(
+                (p: { usageType: string }) => p.usageType === "input",
+              )?.price,
             )
           : 0;
         const outputPrice = modelConfig.Price?.find(
-          (p) => p.usageType === "output",
+          (p: { usageType: string }) => p.usageType === "output",
         )?.price
           ? Number(
-              modelConfig.Price.find((p) => p.usageType === "output")?.price,
+              modelConfig.Price.find(
+                (p: { usageType: string }) => p.usageType === "output",
+              )?.price,
             )
           : 0;
 
