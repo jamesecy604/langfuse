@@ -42,6 +42,8 @@ export function SetupPage() {
   const router = useRouter();
   const [orgStep] = useQueryParam("orgstep", StringParam); // "invite-members" | "create-project"
   const queryProjectId = router.query.projectId as string | undefined;
+  const { data: systemOrgId } = api.system.getSystemOrg.useQuery();
+  const setSystemOrgMutation = api.system.setSystemOrg.useMutation();
 
   // starts at 1 to align with breadcrumb
   const stepInt = !organization
@@ -155,8 +157,64 @@ export function SetupPage() {
                 Organizations are used to manage your projects and teams.
               </p>
               <NewOrganizationForm
-                onSuccess={(orgId) => {
-                  router.push(inviteMembersRoute(orgId));
+                onSuccess={async (orgId) => {
+                  // Set system org ID and create default project
+                  try {
+                    // Verify TRPC mutation is properly initialized
+                    if (!setSystemOrgMutation?.mutateAsync) {
+                      throw new Error(
+                        "TRPC mutation not properly initialized - check your TRPC client setup",
+                      );
+                    }
+                    try {
+                      const result = await setSystemOrgMutation.mutateAsync({
+                        orgId,
+                      });
+
+                      if (!result?.success) {
+                        console.error(
+                          "System org setup failed - no result returned",
+                        );
+                        throw new Error("System org setup failed");
+                      }
+
+                      // Ensure navigation happens after successful mutation
+                      await router.push(inviteMembersRoute(orgId));
+                      return result;
+                    } catch (err) {
+                      console.error("Failed to navigate to next step:", err);
+                      throw err;
+                    }
+                  } catch (error) {
+                    console.groupCollapsed("System Setup Error");
+                    console.error("Failed to set system org:", error);
+                    if (error instanceof Error) {
+                      if (
+                        error.message.includes(
+                          "System organization already configured",
+                        )
+                      ) {
+                        console.error(
+                          "System organization is already configured. Please contact support if you need to change this.",
+                        );
+                      } else if (
+                        error.message.includes(
+                          "System setup endpoint not available",
+                        )
+                      ) {
+                        console.error(
+                          "System setup feature is not available in this environment",
+                        );
+                      } else {
+                        console.error(
+                          `Failed to complete system setup: ${error.message}`,
+                        );
+                      }
+                    } else {
+                      console.error("Failed to complete system setup");
+                    }
+                    console.groupEnd();
+                  }
                 }}
               />
             </div>
@@ -195,6 +253,7 @@ export function SetupPage() {
                 onSuccess={(projectId) =>
                   router.push(setupTracingRoute(projectId))
                 }
+                wizardMode={true}
               />
             </div>
           )

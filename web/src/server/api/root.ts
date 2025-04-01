@@ -1,4 +1,5 @@
 import { createTRPCRouter } from "@/src/server/api/trpc";
+import { systemRouter } from "./routers/system";
 import { traceRouter } from "./routers/traces";
 import { generationsRouter } from "./routers/generations";
 import { scoresRouter } from "./routers/scores";
@@ -68,6 +69,7 @@ export const appRouter = createTRPCRouter({
   balance: balanceRouter,
   llmApiKeyUsage: llmApiKeyUsageRouter,
   cachedModels: cachedModelsRouter,
+  system: systemRouter,
 });
 
 // export type definition of API

@@ -31,6 +31,24 @@ export const projectsRouter = createTRPCRouter({
       return Boolean(defaultProject);
     }),
 
+  getDefault: protectedOrganizationProcedure
+    .input(z.object({ orgId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const defaultProject = await ctx.prisma.project.findFirst({
+        where: {
+          orgId: input.orgId,
+          isDefault: true,
+        },
+      });
+      if (!defaultProject) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No default project found for organization",
+        });
+      }
+      return defaultProject;
+    }),
+
   create: protectedOrganizationProcedure
     .input(
       z.object({

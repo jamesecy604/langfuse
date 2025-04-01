@@ -22,9 +22,11 @@ import { api } from "@/src/utils/api";
 export const NewProjectForm = ({
   orgId,
   onSuccess,
+  wizardMode = false,
 }: {
   orgId: string;
   onSuccess: (projectId: string) => void;
+  wizardMode?: boolean;
 }) => {
   const { data: hasDefaultProject } = api.projects.hasDefault.useQuery(
     {
@@ -43,7 +45,7 @@ export const NewProjectForm = ({
     resolver: zodResolver(projectNameSchema),
     defaultValues: {
       name: "",
-      isDefault: false,
+      isDefault: wizardMode,
     },
   });
   const router = useRouter();
@@ -99,7 +101,7 @@ export const NewProjectForm = ({
             </FormItem>
           )}
         />
-        {!hasDefaultProject && (
+        {!hasDefaultProject && !wizardMode && (
           <FormField
             control={form.control}
             name="isDefault"
