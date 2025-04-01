@@ -10,6 +10,7 @@ import { projectNameSchema } from "@/src/features/auth/lib/projectNameSchema";
 import { auditLog } from "@/src/features/audit-logs/auditLog";
 import { throwIfNoOrganizationAccess } from "@/src/features/rbac/utils/checkOrganizationAccess";
 import { ApiAuthService } from "@/src/features/public-api/server/apiAuth";
+import { Role } from "@langfuse/shared/src/db";
 import {
   QueueJobs,
   redis,
@@ -55,6 +56,7 @@ export const projectsRouter = createTRPCRouter({
         name: projectNameSchema.shape.name,
         orgId: z.string(),
         isDefault: z.boolean().optional(),
+        wizardMode: z.boolean().optional().default(false),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -92,6 +94,37 @@ export const projectsRouter = createTRPCRouter({
         action: "create",
         after: project,
       });
+
+      if (input.wizardMode) {
+        // Check if organization membership already exists
+        let orgMembership = await ctx.prisma.organizationMembership.findFirst({
+          where: {
+            userId: ctx.session.user.id,
+            orgId: input.orgId,
+          },
+        });
+
+        // Create organization membership if it doesn't exist
+        if (!orgMembership) {
+          orgMembership = await ctx.prisma.organizationMembership.create({
+            data: {
+              userId: ctx.session.user.id,
+              orgId: input.orgId,
+              role: Role.OWNER,
+            },
+          });
+        }
+
+        // Create project membership linking user to new project
+        await ctx.prisma.projectMembership.create({
+          data: {
+            userId: ctx.session.user.id,
+            projectId: project.id,
+            orgMembershipId: orgMembership.id,
+            role: Role.OWNER,
+          },
+        });
+      }
 
       return {
         id: project.id,

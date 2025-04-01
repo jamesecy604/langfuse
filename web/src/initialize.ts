@@ -94,16 +94,16 @@ if (env.LANGFUSE_INIT_ORG_ID) {
     }
 
     // Create OrgMembership: Org -> OrgMembership <- User
-    await prisma.organizationMembership.upsert({
-      where: {
-        orgId_userId: { userId, orgId: org.id },
-      },
-      update: { role: "OWNER" },
-      create: {
-        userId,
-        orgId: org.id,
-        role: "OWNER",
-      },
-    });
+    // await prisma.organizationMembership.upsert({
+    //   where: {
+    //     orgId_userId: { userId, orgId: org.id },
+    //   },
+    //   update: { role: "OWNER" },
+    //   create: {
+    //     userId,
+    //     orgId: org.id,
+    //     role: "OWNER",
+    //   },
+    // });
   }
 }

@@ -18,6 +18,7 @@ import { projectNameSchema } from "@/src/features/auth/lib/projectNameSchema";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
 import { Checkbox } from "@/src/components/ui/checkbox";
 import { api } from "@/src/utils/api";
+import { Role } from "@prisma/client";
 
 export const NewProjectForm = ({
   orgId,
@@ -37,7 +38,7 @@ export const NewProjectForm = ({
     },
   );
   const capture = usePostHogClientCapture();
-  const { update: updateSession } = useSession();
+  const { data: session, update: updateSession } = useSession();
 
   const form = useForm<
     z.infer<typeof projectNameSchema> & { isDefault: boolean }
@@ -57,23 +58,28 @@ export const NewProjectForm = ({
     onError: (error) => form.setError("name", { message: error.message }),
   });
 
-  function onSubmit(
+  async function onSubmit(
     values: z.infer<typeof projectNameSchema> & { isDefault: boolean },
   ) {
     capture("projects:new_form_submit");
-    createProjectMutation
-      .mutateAsync({
+    try {
+      const project = await createProjectMutation.mutateAsync({
         name: values.name,
         orgId,
         isDefault: values.isDefault,
-      })
-      .then((project) => {
-        onSuccess(project.id);
-        form.reset();
-      })
-      .catch((error) => {
-        console.error(error);
+        wizardMode,
       });
+
+      if (wizardMode) {
+        // Memberships are handled by the setup wizard flow
+        values.isDefault = true;
+      }
+
+      onSuccess(project.id);
+      form.reset();
+    } catch (error) {
+      console.error(error);
+    }
     chatRunTrigger("after-project-creation");
   }
   return (
