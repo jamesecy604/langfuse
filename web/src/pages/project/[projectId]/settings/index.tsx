@@ -132,6 +132,29 @@ export function useProjectSettingsPages(): ProjectSettingsPage[] {
   );
 
   // Memoize the pages computation with more specific dependencies
+  const hasUserApiKeyAccess = useHasProjectAccess({
+    projectId: project?.id ?? "",
+    scope: "userApiKeys:CUD",
+  });
+  const hasUserApiKeyReadAccess = useHasProjectAccess({
+    projectId: project?.id ?? "",
+    scope: "userApiKeys:read",
+  });
+
+  // Calculate all access checks up front
+  const llmApiKeyReadAccess = useHasProjectAccess({
+    projectId: project?.id ?? "",
+    scope: "llmApiKeys:read",
+  });
+  const projectUpdateAccess = useHasProjectAccess({
+    projectId: project?.id ?? "",
+    scope: "project:update",
+  });
+  const projectMembersReadAccess = useHasProjectAccess({
+    projectId: project?.id ?? "",
+    scope: "projectMembers:read",
+  });
+
   return useMemo(() => {
     if (!project?.id || !organization?.id || !router.query.projectId) {
       return [];
@@ -146,6 +169,11 @@ export function useProjectSettingsPages(): ProjectSettingsPage[] {
       showBillingSettings: entitlements.showBillingSettings,
       showRetentionSettings: entitlements.showRetentionSettings,
       showLLMConnectionsSettings,
+      hasUserApiKeyAccess,
+      hasUserApiKeyReadAccess,
+      llmApiKeyReadAccess,
+      projectUpdateAccess,
+      projectMembersReadAccess,
     });
   }, [
     project?.id,
@@ -153,6 +181,11 @@ export function useProjectSettingsPages(): ProjectSettingsPage[] {
     router.query.projectId,
     entitlements.showBillingSettings,
     entitlements.showRetentionSettings,
+    hasUserApiKeyAccess,
+    hasUserApiKeyReadAccess,
+    llmApiKeyReadAccess,
+    projectUpdateAccess,
+    projectMembersReadAccess,
   ]);
 }
 
@@ -163,12 +196,22 @@ export function getProjectSettingsPages({
   showBillingSettings,
   showRetentionSettings,
   showLLMConnectionsSettings,
+  hasUserApiKeyAccess,
+  hasUserApiKeyReadAccess,
+  llmApiKeyReadAccess,
+  projectUpdateAccess,
+  projectMembersReadAccess,
 }: {
   project: { id: string; name: string };
   organization: { id: string; name: string };
   showBillingSettings: boolean;
   showRetentionSettings: boolean;
   showLLMConnectionsSettings: boolean;
+  hasUserApiKeyAccess: boolean;
+  hasUserApiKeyReadAccess: boolean;
+  llmApiKeyReadAccess: boolean;
+  projectUpdateAccess: boolean;
+  projectMembersReadAccess: boolean;
 }): ProjectSettingsPage[] {
   return [
     {
@@ -202,6 +245,7 @@ export function getProjectSettingsPages({
           <ApiKeyListUser projectId={project.id} />
         </div>
       ),
+      show: hasUserApiKeyReadAccess,
     },
     {
       title: "LLM Connections",
@@ -222,7 +266,7 @@ export function getProjectSettingsPages({
           <LlmApiKeyList projectId={project.id} />
         </div>
       ),
-      show: showLLMConnectionsSettings,
+      show: llmApiKeyReadAccess,
     },
     {
       title: "Cost & Usage",
@@ -233,6 +277,7 @@ export function getProjectSettingsPages({
           <CostUsagePage />
         </div>
       ),
+      show: projectUpdateAccess,
     },
     {
       title: "Models",
@@ -267,6 +312,7 @@ export function getProjectSettingsPages({
           </div>
         </div>
       ),
+      show: projectMembersReadAccess,
     },
     // {
     //   title: "Integrations",
@@ -290,6 +336,7 @@ export function getProjectSettingsPages({
       title: "Organization Settings",
       slug: "organization",
       href: `/organization/${organization.id}/settings`,
+      show: projectUpdateAccess,
     },
   ];
 }

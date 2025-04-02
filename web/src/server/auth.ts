@@ -463,7 +463,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 env.LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES === "true",
               disableExpensivePostgresQueries:
                 env.LANGFUSE_DISABLE_EXPENSIVE_POSTGRES_QUERIES === "true",
-              selfHostedInstancePlan: "oss" as const, // Explicitly typed as Plan type
+              selfHostedInstancePlan: "self-hosted:enterprise" as const,
             },
             user:
               dbUser !== null

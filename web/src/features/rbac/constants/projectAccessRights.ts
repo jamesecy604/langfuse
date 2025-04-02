@@ -35,6 +35,7 @@ const projectScopes = [
   "prompts:read",
 
   "models:CUD",
+  "models:read",
 
   "batchExports:create",
   "batchExports:read",
@@ -178,10 +179,12 @@ export const projectRoleAccessRights: Record<Role, ProjectScope[]> = {
     "scoreConfigs:read",
     "evalJob:read",
     "evalJobExecution:read",
-    "llmApiKeys:read",
+    "userApiKeys:read",
+    "userApiKeys:CUD",
     "comments:read",
     "annotationQueues:read",
     "promptExperiments:read",
+    "models:read",
   ],
   NONE: [],
 };
