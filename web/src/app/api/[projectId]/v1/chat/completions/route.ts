@@ -201,9 +201,7 @@ export async function POST(
     }
 
     // Decrypt the API key
-    const decryptedKey = await decrypt(
-      "119a937918ee36ab0b206e00:d25cd84deebe86be473f55d1a55fb2ca94cd95264198a668657c86e2b86bdec7b748c3:8d7a077807fa4812f2650afe6e8265b5",
-    );
+    const decryptedKey = await decrypt(llmConfig.secretKey);
     if (!decryptedKey) {
       return NextResponse.json(
         { error: "Failed to decrypt API key" },
@@ -213,7 +211,7 @@ export async function POST(
 
     const api = new OpenAI({
       apiKey: decryptedKey,
-      baseURL: "https://api.deepseek.com",
+      baseURL: llmConfig.baseUrl,
     });
 
     if (stream) {
