@@ -1,16 +1,14 @@
-import { env } from "@/src/env.mjs";
 import { prisma, Role } from "@langfuse/shared/src/db";
 import { logger } from "@langfuse/shared/src/server";
+import { initSystemOrgId } from "../../../../../packages/shared/src/server/init/systemOrgId";
+import { env } from "@/src/env.mjs";
 
 export async function createProjectMembershipsOnSignup(user: {
   id: string;
   email: string | null;
 }) {
   try {
-    // SYSTEM_ORG_ID must exist for this function
-    if (!env.SYSTEM_ORG_ID) {
-      throw new Error("SYSTEM_ORG_ID is not set");
-    }
+    const systemOrgId = await initSystemOrgId();
 
     // Find default project (isDefault=true)
     // Find default project (isDefault=true)
@@ -29,7 +27,7 @@ export async function createProjectMembershipsOnSignup(user: {
     const orgMembership = await prisma.organizationMembership.create({
       data: {
         userId: user.id,
-        orgId: env.SYSTEM_ORG_ID,
+        orgId: systemOrgId,
         role: Role.VIEWER,
       },
     });
