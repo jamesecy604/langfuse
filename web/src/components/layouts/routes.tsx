@@ -74,81 +74,76 @@ export const ROUTES: Route[] = [
         title: "Traces",
         pathname: `/project/[projectId]/traces`,
       },
-      {
-        title: "Sessions",
-        pathname: `/project/[projectId]/sessions`,
-      },
+      // {
+      //   title: "Sessions",
+      //   pathname: `/project/[projectId]/sessions`,
+      // },
       {
         title: "Observations",
         pathname: `/project/[projectId]/observations`,
       },
-      {
-        title: "Scores",
-        pathname: `/project/[projectId]/scores`,
-      },
+      // {
+      //   title: "Scores",
+      //   pathname: `/project/[projectId]/scores`,
+      // },
     ],
   },
-  {
-    title: "Evaluation",
-    icon: Lightbulb,
-    pathname: `/project/[projectId]/annotation-queues`,
-    entitlements: ["annotation-queues", "model-based-evaluations"],
-    projectRbacScopes: ["annotationQueues:read", "evalJob:read"],
-    items: [
-      {
-        title: "Human Annotation",
-        pathname: `/project/[projectId]/annotation-queues`,
-        projectRbacScopes: ["annotationQueues:read"],
-        entitlements: ["annotation-queues"],
-      },
-      {
-        title: "LLM-as-a-Judge",
-        pathname: `/project/[projectId]/evals`,
-        entitlements: ["model-based-evaluations"],
-        projectRbacScopes: ["evalJob:read"],
-      },
-    ],
-  },
+  // {
+  //   title: "Evaluation",
+  //   icon: Lightbulb,
+  //   pathname: `/project/[projectId]/annotation-queues`,
+  //   entitlements: ["annotation-queues", "model-based-evaluations"],
+  //   projectRbacScopes: ["annotationQueues:read", "evalJob:read"],
+  //   items: [
+  //     {
+  //       title: "Human Annotation",
+  //       pathname: `/project/[projectId]/annotation-queues`,
+  //       projectRbacScopes: ["annotationQueues:read"],
+  //       entitlements: ["annotation-queues"],
+  //     },
+  //     {
+  //       title: "LLM-as-a-Judge",
+  //       pathname: `/project/[projectId]/evals`,
+  //       entitlements: ["model-based-evaluations"],
+  //       projectRbacScopes: ["evalJob:read"],
+  //     },
+  //   ],
+  // },
   {
     title: "Users",
     pathname: `/project/[projectId]/users`,
     icon: UsersIcon,
   },
-  {
-    title: "Prompts",
-    pathname: "/project/[projectId]/prompts",
-    icon: FileJson,
-    projectRbacScopes: ["prompts:read"],
-  },
-  {
-    title: "Playground",
-    pathname: "/project/[projectId]/playground",
-    icon: TerminalIcon,
-    entitlements: ["playground"],
-  },
-  {
-    title: "Datasets",
-    pathname: `/project/[projectId]/datasets`,
-    icon: Database,
-  },
-  {
-    title: "Upgrade",
-    icon: Sparkle,
-    pathname: "/project/[projectId]/settings/billing",
-    bottom: true,
-    entitlements: ["cloud-billing"],
-    organizationRbacScope: "langfuseCloudBilling:CRUD",
-    show: ({ organization }) => organization?.plan === "cloud:hobby",
-  },
-  {
-    title: "Upgrade",
-    icon: Sparkle,
-    pathname: "/organization/[organizationId]/settings/billing",
-    bottom: true,
-    entitlements: ["cloud-billing"],
-    organizationRbacScope: "langfuseCloudBilling:CRUD",
-    show: ({ organization }) => organization?.plan === "cloud:hobby",
-  },
+  // {
+  //   title: "Prompts",
+  //   pathname: "/project/[projectId]/prompts",
+  //   icon: FileJson,
+  //   projectRbacScopes: ["prompts:read"],
+  // },
+
+  // {
+  //   title: "Datasets",
+  //   pathname: `/project/[projectId]/datasets`,
+  //   icon: Database,
+  // },
+  // {
+  //   title: "Upgrade",
+  //   icon: Sparkle,
+  //   pathname: "/project/[projectId]/settings/billing",
+  //   bottom: true,
+  //   entitlements: ["cloud-billing"],
+  //   organizationRbacScope: "langfuseCloudBilling:CRUD",
+  //   show: ({ organization }) => organization?.plan === "cloud:hobby",
+  // },
+  // {
+  //   title: "Upgrade",
+  //   icon: Sparkle,
+  //   pathname: "/organization/[organizationId]/settings/billing",
+  //   bottom: true,
+  //   entitlements: ["cloud-billing"],
+  //   organizationRbacScope: "langfuseCloudBilling:CRUD",
+  //   show: ({ organization }) => organization?.plan === "cloud:hobby",
+  // },
   {
     title: "Settings",
     pathname: "/project/[projectId]/settings",
@@ -167,13 +162,13 @@ export const ROUTES: Route[] = [
     icon: Settings,
     bottom: true,
   },
-  {
-    title: "Support",
-    icon: LifeBuoy,
-    bottom: true,
-    pathname: "", // Empty pathname since this is a dropdown
-    menuNode: <SupportMenuDropdown />,
-  },
+  // {
+  //   title: "Support",
+  //   icon: LifeBuoy,
+  //   bottom: true,
+  //   pathname: "", // Empty pathname since this is a dropdown
+  //   menuNode: <SupportMenuDropdown />,
+  // },
 ];
 
 function CommandMenuTrigger() {

@@ -18,7 +18,6 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import { Alert, AlertDescription } from "@/src/components/ui/alert";
 import { LangfuseLogo } from "@/src/components/LangfuseLogo";
-import { SidebarNotifications } from "@/src/components/nav/sidebar-notifications";
 import { BalanceSection } from "@/src/features/public-api/components/BalanceSection";
 
 type AppSidebarProps = {
@@ -40,14 +39,10 @@ export function AppSidebar({
           <LangfuseLogo version />
         </div>
         <div className="h-1 flex-1 border-b" />
-        <DemoBadge />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navItems} />
         <div className="flex-1" />
-        <div className="flex flex-col gap-2 p-2">
-          <SidebarNotifications />
-        </div>
         <NavMain items={secondaryNavItems} />
       </SidebarContent>
       <SidebarFooter>
@@ -58,28 +53,3 @@ export function AppSidebar({
     </Sidebar>
   );
 }
-
-const DemoBadge = () => {
-  const router = useRouter();
-  const routerProjectId = router.query.projectId as string | undefined;
-
-  return env.NEXT_PUBLIC_DEMO_ORG_ID &&
-    env.NEXT_PUBLIC_DEMO_PROJECT_ID &&
-    routerProjectId === env.NEXT_PUBLIC_DEMO_PROJECT_ID &&
-    Boolean(env.NEXT_PUBLIC_LANGFUSE_CLOUD_REGION) ? (
-    <div className="flex border-b px-3 py-2">
-      <Alert className="rounded-md bg-light-yellow group-data-[collapsible=icon]:hidden">
-        <AlertDescription className="overflow-hidden text-ellipsis whitespace-nowrap text-xs">
-          View-only{" "}
-          <Link
-            href="https://langfuse.com/docs/demo"
-            target="_blank"
-            className="underline"
-          >
-            demo project
-          </Link>
-        </AlertDescription>
-      </Alert>
-    </div>
-  ) : null;
-};

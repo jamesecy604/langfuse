@@ -3,7 +3,7 @@ import Header from "@/src/components/layouts/header";
 import { Button } from "@/src/components/ui/button";
 import Link from "next/link";
 import { PagedSettingsContainer } from "@/src/components/PagedSettingsContainer";
-import { useQueryProject } from "@/src/features/projects/hooks";
+import { useQueryProject, useNextAuthUrl } from "@/src/features/projects/hooks";
 import { JSONView } from "@/src/components/ui/CodeJsonViewer";
 import { PostHogLogo } from "@/src/components/PosthogLogo";
 import { Card } from "@/src/components/ui/card";
@@ -114,7 +114,9 @@ type ProjectSettingsPage = {
   cmdKKeywords?: string[];
 } & ({ content: React.ReactNode } | { href: string });
 
-export function useProjectSettingsPages(): ProjectSettingsPage[] {
+export function useProjectSettingsPages(
+  baseUrl?: string,
+): ProjectSettingsPage[] {
   const router = useRouter();
   const { project, organization } = useQueryProject();
 
@@ -164,6 +166,7 @@ export function useProjectSettingsPages(): ProjectSettingsPage[] {
     const showLLMConnectionsSettings = true;
 
     return getProjectSettingsPages({
+      baseUrl,
       project,
       organization,
       showBillingSettings: entitlements.showBillingSettings,
@@ -191,6 +194,7 @@ export function useProjectSettingsPages(): ProjectSettingsPage[] {
 
 // Pure function to generate settings pages
 export function getProjectSettingsPages({
+  baseUrl,
   project,
   organization,
   showBillingSettings,
@@ -202,6 +206,7 @@ export function getProjectSettingsPages({
   projectUpdateAccess,
   projectMembersReadAccess,
 }: {
+  baseUrl?: string;
   project: { id: string; name: string };
   organization: { id: string; name: string };
   showBillingSettings: boolean;
@@ -223,6 +228,7 @@ export function getProjectSettingsPages({
           project={project}
           organization={organization}
           showRetentionSettings={showRetentionSettings}
+          baseUrl={baseUrl}
         />
       ),
     },
@@ -342,11 +348,12 @@ export function getProjectSettingsPages({
 }
 
 const SettingsPage = React.memo(() => {
+  const nextAuthUrl = useNextAuthUrl();
   const { project, organization } = useQueryProject();
   const router = useRouter();
 
   // Get pages directly - memoization is already handled in useProjectSettingsPages
-  const pages = useProjectSettingsPages();
+  const pages = useProjectSettingsPages(nextAuthUrl);
 
   if (!project || !organization) return null;
 

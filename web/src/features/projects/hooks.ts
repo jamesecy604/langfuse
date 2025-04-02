@@ -1,6 +1,7 @@
 import { useQueryOrganization } from "@/src/features/organizations/hooks";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
+import { env } from "@/src/env.mjs";
 
 export const useQueryProject = () => {
   const router = useRouter();
@@ -31,6 +32,10 @@ export const useProject = (projectId: string | null) => {
     project: data.project,
     organization: data.organization,
   };
+};
+
+export const useNextAuthUrl = () => {
+  return env.NEXT_PUBLIC_NEXTAUTH_URL;
 };
 
 export const useQueryProjectOrOrganization = () => {
