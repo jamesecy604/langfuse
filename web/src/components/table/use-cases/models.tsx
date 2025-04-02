@@ -86,7 +86,7 @@ export default function ModelTable({ projectId }: { projectId: string }) {
     scope: "models:CUD",
   });
 
-  const columns: LangfuseColumnDef<ModelTableRow>[] = [
+  const baseColumns: LangfuseColumnDef<ModelTableRow>[] = [
     {
       accessorKey: "modelName",
       id: "modelName",
@@ -103,6 +103,36 @@ export default function ModelTable({ projectId }: { projectId: string }) {
       },
       size: 120,
     },
+    {
+      accessorKey: "prices",
+      id: "prices",
+      header: () => {
+        return (
+          <div className="flex items-center gap-2">
+            <span>Prices {priceUnit}</span>
+            <PriceUnitSelector />
+          </div>
+        );
+      },
+      size: 120,
+      cell: ({ row }) => {
+        const prices: Record<string, number> | undefined =
+          row.getValue("prices");
+
+        return (
+          <PriceBreakdownTooltip
+            modelName={row.original.modelName}
+            prices={prices}
+            priceUnit={priceUnit}
+            rowHeight={rowHeight}
+          />
+        );
+      },
+      enableHiding: true,
+    },
+  ];
+
+  const additionalColumns: LangfuseColumnDef<ModelTableRow>[] = [
     {
       accessorKey: "maintainer",
       id: "maintainer",
@@ -148,33 +178,6 @@ export default function ModelTable({ projectId }: { projectId: string }) {
       },
     },
     {
-      accessorKey: "prices",
-      id: "prices",
-      header: () => {
-        return (
-          <div className="flex items-center gap-2">
-            <span>Prices {priceUnit}</span>
-            <PriceUnitSelector />
-          </div>
-        );
-      },
-      size: 120,
-      cell: ({ row }) => {
-        const prices: Record<string, number> | undefined =
-          row.getValue("prices");
-
-        return (
-          <PriceBreakdownTooltip
-            modelName={row.original.modelName}
-            prices={prices}
-            priceUnit={priceUnit}
-            rowHeight={rowHeight}
-          />
-        );
-      },
-      enableHiding: true,
-    },
-    {
       accessorKey: "tokenizerId",
       id: "tokenizerId",
       header: "Tokenizer",
@@ -215,36 +218,44 @@ export default function ModelTable({ projectId }: { projectId: string }) {
         return value?.toLocaleString() ?? "";
       },
     },
-    {
-      accessorKey: "actions",
-      header: "Actions",
-      size: 120,
-      cell: ({ row }) => {
-        return row.original.maintainer !== "Langfuse" ? (
-          <div
-            className="flex items-center gap-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <EditModelButton
-              projectId={projectId}
-              modelData={row.original.serverResponse}
-            />
-            <DeleteModelButton
-              projectId={projectId}
-              modelData={row.original.serverResponse}
-            />
-          </div>
-        ) : (
-          <div onClick={(e) => e.stopPropagation()}>
-            <CloneModelButton
-              projectId={projectId}
-              modelData={row.original.serverResponse}
-            />
-          </div>
-        );
-      },
-    },
+    ...(hasWriteAccess
+      ? [
+          {
+            accessorKey: "actions",
+            header: "Actions",
+            size: 120,
+            cell: ({ row }: { row: { original: ModelTableRow } }) => {
+              return row.original.maintainer !== "Langfuse" ? (
+                <div
+                  className="flex items-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <EditModelButton
+                    projectId={projectId}
+                    modelData={row.original.serverResponse}
+                  />
+                  <DeleteModelButton
+                    projectId={projectId}
+                    modelData={row.original.serverResponse}
+                  />
+                </div>
+              ) : (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <CloneModelButton
+                    projectId={projectId}
+                    modelData={row.original.serverResponse}
+                  />
+                </div>
+              );
+            },
+          },
+        ]
+      : []),
   ];
+
+  const columns = hasWriteAccess
+    ? [...baseColumns, ...additionalColumns]
+    : baseColumns;
 
   const [columnVisibility, setColumnVisibility] =
     useColumnVisibility<ModelTableRow>("modelsColumnVisibility", columns);
@@ -280,14 +291,16 @@ export default function ModelTable({ projectId }: { projectId: string }) {
         setRowHeight={setRowHeight}
         actionButtons={
           <UpsertModelFormDrawer {...{ projectId, action: "create" }}>
-            <ActionButton
-              variant="secondary"
-              icon={<PlusIcon className="h-4 w-4" />}
-              hasAccess={hasWriteAccess}
-              onClick={() => capture("models:new_form_open")}
-            >
-              Add model definition
-            </ActionButton>
+            {hasWriteAccess && (
+              <ActionButton
+                variant="secondary"
+                icon={<PlusIcon className="h-4 w-4" />}
+                hasAccess={hasWriteAccess}
+                onClick={() => capture("models:new_form_open")}
+              >
+                Add model definition
+              </ActionButton>
+            )}
           </UpsertModelFormDrawer>
         }
       />
@@ -319,9 +332,15 @@ export default function ModelTable({ projectId }: { projectId: string }) {
         columnOrder={columnOrder}
         onColumnOrderChange={setColumnOrder}
         rowHeight={rowHeight}
-        onRowClick={(row) => {
-          router.push(`/project/${projectId}/settings/models/${row.modelId}`);
-        }}
+        onRowClick={
+          hasWriteAccess
+            ? (row) => {
+                router.push(
+                  `/project/${projectId}/settings/models/${row.modelId}`,
+                );
+              }
+            : undefined
+        }
       />
     </>
   );
