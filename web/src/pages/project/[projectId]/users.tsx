@@ -1,5 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect } from "react";
+import { useSession } from "next-auth/react";
+import type { Session } from "next-auth";
 import {
   NumberParam,
   StringParam,
@@ -142,31 +144,70 @@ const UsersTable = () => {
     withDefault(StringParam, null),
   );
 
-  const users = api.users.all.useQuery({
-    filter: filterState,
-    page: paginationState.pageIndex,
-    limit: paginationState.pageSize,
-    projectId,
-    searchQuery: searchQuery ?? undefined,
-  });
+  const { data: session } = useSession() as {
+    data: Session & {
+      user?: {
+        organizations?: Array<{
+          projects?: Array<{
+            id: string;
+            role: string;
+          }>;
+        }>;
+      };
+    };
+  };
 
-  // this API call will return an empty array if there are no users.
-  // Hence, this adds one fast unnecessary API call if there are no users.
-  const userMetrics = api.users.metrics.useQuery(
-    {
-      projectId,
-      userIds: users.data?.users.map((u) => u.userId) ?? [],
-      filter: filterState,
-    },
-    {
-      enabled: users.isSuccess,
-      trpc: {
-        context: {
-          skipBatch: true,
-        },
-      },
-    },
-  );
+  const currentProjectRole = session?.user?.organizations?.[0]?.projects?.find(
+    (p) => p.id === projectId,
+  )?.role;
+
+  const users =
+    currentProjectRole === "VIEWER"
+      ? api.users.allGlobal.useQuery({
+          filter: filterState,
+          page: paginationState.pageIndex,
+          limit: paginationState.pageSize,
+          searchQuery: searchQuery ?? undefined,
+        })
+      : api.users.all.useQuery({
+          filter: filterState,
+          page: paginationState.pageIndex,
+          limit: paginationState.pageSize,
+          projectId,
+          searchQuery: searchQuery ?? undefined,
+        });
+
+  const userMetrics =
+    currentProjectRole === "VIEWER"
+      ? api.users.metricsGlobal.useQuery(
+          {
+            userIds: users.data?.users.map((u) => u.userId) ?? [],
+            filter: filterState,
+          },
+          {
+            enabled: users.isSuccess,
+            trpc: {
+              context: {
+                skipBatch: true,
+              },
+            },
+          },
+        )
+      : api.users.metrics.useQuery(
+          {
+            projectId,
+            userIds: users.data?.users.map((u) => u.userId) ?? [],
+            filter: filterState,
+          },
+          {
+            enabled: users.isSuccess,
+            trpc: {
+              context: {
+                skipBatch: true,
+              },
+            },
+          },
+        );
 
   type UserCoreOutput = RouterOutput["users"]["all"]["users"][number];
   type UserMetricsOutput = RouterOutput["users"]["metrics"][number];
@@ -382,7 +423,7 @@ const UsersTable = () => {
                       totalCost: usdFormatter(
                         t.sumCalculatedTotalCost ?? 0,
                         2,
-                        2,
+                        5,
                       ),
                     };
                   }),

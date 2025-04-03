@@ -779,6 +779,225 @@ export const getUserMetrics = async (
   }));
 };
 
+export const getTracesGroupedByUser = async (
+  userId: string,
+  filter: FilterState,
+  searchQuery?: string,
+  limit?: number,
+  offset?: number,
+  columns?: UiColumnMappings,
+) => {
+  const chFilter = createFilterFromFilterState(
+    filter,
+    columns ?? tracesTableUiColumnDefinitions,
+  );
+  const filterRes = new FilterList(chFilter).apply();
+  const search = clickhouseSearchCondition(searchQuery);
+
+  const query = `
+    SELECT 
+      user_id as user,
+      count(*) as count
+    FROM traces
+    WHERE user_id = {userId: String}
+    AND user_id IS NOT NULL
+    AND user_id != ''
+    ${filterRes?.query ? `AND ${filterRes.query}` : ""}
+    ${search.query}
+    GROUP BY user_id
+    ORDER BY count DESC
+    ${limit !== undefined ? `LIMIT {limit: Int32}` : ""}
+    ${offset !== undefined ? `OFFSET {offset: Int32}` : ""}
+  `;
+
+  return queryClickhouse<{
+    user: string;
+    count: string;
+  }>({
+    query,
+    params: {
+      userId,
+      limit,
+      offset,
+      ...(filterRes ? filterRes.params : {}),
+      ...(searchQuery ? search.params : {}),
+    },
+    tags: {
+      feature: "tracing",
+      type: "user",
+      kind: "grouped",
+      userId,
+    },
+  });
+};
+
+export const getTotalUserCountByUser = async (
+  userId: string,
+  filter: FilterState,
+  searchQuery?: string,
+) => {
+  const chFilter = createFilterFromFilterState(
+    filter,
+    tracesTableUiColumnDefinitions,
+  );
+  const filterRes = new FilterList(chFilter).apply();
+  const search = clickhouseSearchCondition(searchQuery);
+
+  const query = `
+    SELECT 
+      count(DISTINCT user_id) as totalCount
+    FROM traces
+    WHERE user_id = {userId: String}
+    AND user_id IS NOT NULL
+    AND user_id != ''
+    ${filterRes?.query ? `AND ${filterRes.query}` : ""}
+    ${search.query}
+  `;
+
+  return queryClickhouse<{
+    totalCount: string;
+  }>({
+    query,
+    params: {
+      userId,
+      ...(filterRes ? filterRes.params : {}),
+      ...(searchQuery ? search.params : {}),
+    },
+    tags: {
+      feature: "tracing",
+      type: "user",
+      kind: "count",
+      userId,
+    },
+  });
+};
+
+export const getUserMetricsByUser = async (
+  userId: string,
+  filter: FilterState,
+) => {
+  const chFilter = createFilterFromFilterState(
+    filter,
+    tracesTableUiColumnDefinitions,
+  );
+  const filterRes = new FilterList(chFilter).apply();
+
+  // this query uses window functions on observations + traces to always get only the first row and thereby remove deduplicates
+  // we filter by user_id to get metrics across all projects for this user
+  const query = `
+      WITH stats as (
+        SELECT
+            t.user_id as user_id,
+            anyLast(t.environment) as environment,
+            count(distinct o.id) as obs_count,
+            sumMap(usage_details) as sum_usage_details,
+            sum(total_cost) as sum_total_cost,
+            max(t.timestamp) as max_timestamp,
+            min(t.timestamp) as min_timestamp,
+            count(distinct t.id) as trace_count
+        FROM
+            (
+                SELECT
+                    o.project_id,
+                    o.trace_id,
+                    o.usage_details,
+                    o.total_cost,
+                    o.id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY o.id
+                        ORDER BY
+                            o.event_ts DESC
+                    ) AS rn
+                FROM
+                    observations o
+                WHERE
+                    o.trace_id IN (
+                        SELECT id 
+                        FROM traces 
+                        WHERE user_id = {userId: String}
+                        ${filterRes?.query ? `AND ${filterRes.query}` : ""}
+                    )
+                    AND o.type = 'GENERATION'
+            ) as o
+            JOIN (
+                SELECT
+                    t.id,
+                    t.user_id,
+                    t.project_id,
+                    t.timestamp,
+                    t.environment,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY id
+                        ORDER BY
+                            event_ts DESC
+                    ) AS rn
+                FROM
+                    traces t
+                WHERE
+                    t.user_id = {userId: String}
+                    ${filterRes?.query ? `AND ${filterRes.query}` : ""}
+            ) as t on t.id = o.trace_id
+            and t.project_id = o.project_id
+        WHERE
+            o.rn = 1
+            and t.rn = 1
+        group by
+            t.user_id
+    )
+    SELECT
+        arraySum(mapValues(mapFilter(x -> positionCaseInsensitive(x.1, 'input') > 0, sum_usage_details))) as input_usage,
+        arraySum(mapValues(mapFilter(x -> positionCaseInsensitive(x.1, 'output') > 0, sum_usage_details))) as output_usage,
+        sum_usage_details['total'] as total_usage,
+        obs_count,
+        trace_count,
+        user_id,
+        environment,
+        sum_total_cost,
+        max_timestamp,
+        min_timestamp
+    FROM
+        stats
+  `;
+
+  const rows = await queryClickhouse<{
+    user_id: string;
+    environment: string;
+    max_timestamp: string;
+    min_timestamp: string;
+    input_usage: string;
+    output_usage: string;
+    total_usage: string;
+    obs_count: string;
+    trace_count: string;
+    sum_total_cost: string;
+  }>({
+    query,
+    params: {
+      userId,
+      ...(filterRes ? filterRes.params : {}),
+    },
+    tags: {
+      feature: "tracing",
+      type: "user",
+      kind: "metrics",
+      userId,
+    },
+  });
+
+  return rows.map((row) => ({
+    userId: row.user_id,
+    environment: row.environment,
+    maxTimestamp: parseClickhouseUTCDateTimeFormat(row.max_timestamp),
+    minTimestamp: parseClickhouseUTCDateTimeFormat(row.min_timestamp),
+    inputUsage: Number(row.input_usage),
+    outputUsage: Number(row.output_usage),
+    totalUsage: Number(row.total_usage),
+    observationCount: Number(row.obs_count),
+    traceCount: Number(row.trace_count),
+    totalCost: Number(row.sum_total_cost),
+  }));
+};
+
 export const getTracesForPostHog = async function* (
   projectId: string,
   minTimestamp: Date,
