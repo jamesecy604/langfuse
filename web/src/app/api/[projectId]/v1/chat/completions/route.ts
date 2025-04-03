@@ -147,7 +147,6 @@ export async function POST(
     }
 
     const llmApiKeys = await cache.getCachedApiKeys(params.projectId);
-
     if (!llmApiKeys) {
       return NextResponse.json(
         { error: "Not able to find LLM Api key" },
@@ -211,7 +210,7 @@ export async function POST(
 
     const api = new OpenAI({
       apiKey: decryptedKey,
-      baseURL: llmConfig.baseUrl,
+      baseURL: llmConfig.baseURL,
     });
 
     if (stream) {
