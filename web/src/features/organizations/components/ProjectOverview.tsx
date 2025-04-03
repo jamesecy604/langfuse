@@ -4,7 +4,10 @@ import {
   MessageSquareText,
   Settings,
   Users,
+  RefreshCw,
 } from "lucide-react";
+import { api } from "@/src/utils/api";
+import { useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -110,6 +113,9 @@ const OrganizationActionButtons = ({
     scope: "projects:create",
   });
 
+  const { mutateAsync: initializeCache, isLoading } =
+    api.cachedModels.initializeCache.useMutation();
+
   return (
     <>
       <Button asChild variant="ghost">
@@ -137,6 +143,14 @@ const OrganizationActionButtons = ({
           New project
         </Button>
       )}
+      <Button
+        variant="ghost"
+        onClick={() => void initializeCache()}
+        title="Sync models and API keys to cache"
+        loading={isLoading}
+      >
+        <RefreshCw className="h-4 w-4" />
+      </Button>
     </>
   );
 };

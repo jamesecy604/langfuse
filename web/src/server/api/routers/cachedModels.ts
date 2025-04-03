@@ -6,6 +6,7 @@ import { throwIfNoProjectAccess } from "@/src/features/rbac/utils/checkProjectAc
 import {
   createTRPCRouter,
   protectedProjectProcedure,
+  protectedProcedure,
 } from "@/src/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 
@@ -114,4 +115,10 @@ export const cachedModelsRouter = createTRPCRouter({
       await cache.cacheProjectApiKey(input);
       return { success: true };
     }),
+
+  initializeCache: protectedProcedure.mutation(async () => {
+    const cache = new ModelCacheService();
+    await cache.initializeCache();
+    return { success: true };
+  }),
 });
