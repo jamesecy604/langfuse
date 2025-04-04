@@ -19,45 +19,24 @@ import { ScoreAggregate } from "../../features/scores";
 
 // Helper function to process parameters for ClickHouse queries
 const processParams = (filterParams: Record<string, unknown>) => {
-  console.log("=== START processParams ===");
-  console.log("Raw input parameters:", JSON.stringify(filterParams, null, 2));
-
   const processed = Object.fromEntries(
     Object.entries(filterParams).map(([key, value]) => {
-      console.log(`Processing parameter ${key}:`, {
-        type: typeof value,
-        value,
-        isArray: Array.isArray(value),
-      });
-
       if (Array.isArray(value)) {
-        console.log(`Passing through array parameter ${key}:`, value);
         return [key, value];
       } else if (typeof value === "string" && value.includes(",")) {
         const processedValue = value.split(",").map((v) => v.trim());
-        console.log(
-          `Split string parameter ${key} into array:`,
-          processedValue,
-        );
+
         return [key, processedValue];
       } else if (typeof value === "number") {
-        console.log(`Passing through number parameter ${key}:`, value);
         return [key, value];
       } else if (typeof value === "string") {
-        console.log(`Passing through string parameter ${key}:`, value);
         return [key, value];
       }
 
-      console.log(`Passing through parameter ${key} as-is:`, value);
       return [key, value];
     }),
   );
 
-  console.log(
-    "Final processed parameters:",
-    JSON.stringify(processed, null, 2),
-  );
-  console.log("=== END processParams ===");
   return processed;
 };
 import {
@@ -355,7 +334,7 @@ const getTracesTableGenericByUser = async <T>(
     case "metrics":
       sqlSelect = `
         t.id as id,
-        t.user_id as user_id,
+        t.project_id as project_id,
         t.timestamp as timestamp,
         os.latency_milliseconds / 1000 as latency,
         os.cost_details as cost_details,
@@ -372,14 +351,14 @@ const getTracesTableGenericByUser = async <T>(
     case "rows":
       sqlSelect = `
         t.id as id,
-        t.user_id as user_id,
+        t.project_id as project_id,
         t.timestamp as timestamp,
         t.tags as tags,
         t.bookmarked as bookmarked,
         t.name as name,
         t.release as release,
         t.version as version,
-        t.project_id as project_id,
+        t.user_id as user_id,
         t.environment as environment,
         t.session_id as session_id,
         t.public as public`;
@@ -394,7 +373,6 @@ const getTracesTableGenericByUser = async <T>(
   tracesFilter.push(
     ...createFilterFromFilterState(filter, tracesTableUiColumnDefinitions),
   );
-
   const traceIdFilter = tracesFilter.find(
     (f) => f.clickhouseTable === "traces" && f.field === "id",
   ) as StringFilter | StringOptionsFilter | undefined;
@@ -498,9 +476,9 @@ const getTracesTableGenericByUser = async <T>(
     WITH observations_stats AS (
       SELECT
         COUNT(*) AS observation_count,
-          sumMap(usage_details) as usage_details,
-          SUM(total_cost) AS total_cost,
-          date_diff('millisecond', least(min(start_time), min(end_time)), greatest(max(start_time), max(end_time))) as latency_milliseconds,
+          sumMap(o.usage_details) as usage_details,
+          SUM(o.total_cost) AS total_cost,
+          date_diff('millisecond', least(min(o.start_time), min(o.end_time)), greatest(max(o.start_time), max(o.end_time))) as latency_milliseconds,
           countIf(level = 'ERROR') as error_count,
           countIf(level = 'WARNING') as warning_count,
           countIf(level = 'DEFAULT') as default_count,
@@ -511,29 +489,27 @@ const getTracesTableGenericByUser = async <T>(
             arrayExists(x -> x = 'DEFAULT', groupArray(level)), 'DEFAULT',
             'DEBUG'
           ) AS aggregated_level,
-          sumMap(cost_details) as cost_details,
-          trace_id,
-          user_id
+          sumMap(o.cost_details) as cost_details,
+          o.trace_id,
+          t.user_id as osuser_id
       FROM observations o FINAL 
-      WHERE o.user_id = {userId: String}
-      ${timeStampFilter ? `AND o.start_time >= {traceTimestamp: DateTime64(3)} - ${OBSERVATIONS_TO_TRACE_INTERVAL}` : ""}
-      ${observationsFilter ? `AND ${observationFilterRes.query}` : ""}
-      GROUP BY trace_id, project_id
+      INNER JOIN traces t ON o.trace_id = t.id
+      WHERE (t.user_id = {userId: String})
+      ${timeStampFilter ? `AND (o.start_time >= {traceTimestamp: DateTime64(3)} - ${OBSERVATIONS_TO_TRACE_INTERVAL})` : ""}
+      --${observationsFilter ? `AND (${observationFilterRes.query})` : ""}
+      GROUP BY o.trace_id, t.user_id
     ),
     scores_avg AS (
       SELECT
-        user_id,
+        project_id,
         trace_id,
         groupArray(tuple(name, avg_value)) AS "scores_avg"
       FROM (
-        SELECT user_id,
+        SELECT project_id,
                 trace_id,
                 name,
                 avg(value) avg_value
-        FROM scores s FINAL 
-        WHERE user_id = {userId: String}
-        ${timeStampFilter ? `AND s.timestamp >= {traceTimestamp: DateTime64(3)} - ${SCORE_TO_TRACE_OBSERVATIONS_INTERVAL}` : ""}
-        ${scoresFilterRes ? `AND ${scoresFilterRes.query}` : ""}
+        FROM scores s FINAL
         GROUP BY project_id,
                   trace_id,
                   name
@@ -543,18 +519,24 @@ const getTracesTableGenericByUser = async <T>(
     SELECT ${sqlSelect}
     -- FINAL is used for non default ordering and count.
     FROM traces t  ${["metrics", "rows"].includes(select) && defaultOrder ? "" : "FINAL"}
-    ${select === "metrics" || requiresObservationsJoin ? `LEFT JOIN observations_stats os on os.user_id = t.user_id and os.trace_id = t.id` : ""}
-    ${select === "metrics" || requiresScoresJoin ? `LEFT JOIN scores_avg s on s.user_id = t.user_id and s.trace_id = t.id` : ""}
+    ${select === "metrics" || requiresObservationsJoin ? `LEFT JOIN observations_stats os on os.osuser_id = t.user_id and os.trace_id = t.id` : ""}
+    ${select === "metrics" || requiresScoresJoin ? `LEFT JOIN scores_avg s on s.project_id = t.project_id and s.trace_id = t.id` : ""}
     WHERE t.user_id = {userId: String}
     ${tracesFilterRes ? `AND ${tracesFilterRes.query}` : ""}
     ${search.query}
     ${chOrderBy}
     -- This is used for metrics and row queries. Count has only one result.
     -- This is only used for default ordering. Otherwise, we use final.
-    ${["metrics", "rows"].includes(select) && defaultOrder ? "LIMIT 1 BY id, project_id" : ""}
+    ${["metrics", "rows"].includes(select) && defaultOrder ? "LIMIT 1 BY id, user_id" : ""}
     ${limit !== undefined && page !== undefined ? `LIMIT {limit: Int32} OFFSET {offset: Int32}` : ""}
   `;
-
+  console.log(
+    "=========================================where",
+    `WHERE t.user_id = {userId: String}
+    ${tracesFilterRes ? `AND ${tracesFilterRes.query}` : ""}
+    ${search.query}
+    ${chOrderBy}`,
+  );
   // Prepare params ensuring all values are properly formatted for ClickHouse
   const params = {
     limit: limit !== undefined ? Number(limit) : undefined,
@@ -734,7 +716,13 @@ const getTracesTableGeneric = async <T>(props: FetchTracesTableProps) => {
   // - we filter the observations and scores as much as possible before joining them to traces.
   // - we order by todate(timestamp), event_ts desc per default and do not use FINAL.
   //   In this case, CH is able to read the data only from the latest date from disk and filtering them in memory. No need to read all data e.g. for 1 month from disk.
-
+  console.log(
+    "=========================================where",
+    `WHERE t.project_id = {projectId: String}
+    ${tracesFilterRes ? `AND ${tracesFilterRes.query}` : ""}
+    ${search.query}
+    ${chOrderBy}`,
+  );
   const query = `
     WITH observations_stats AS (
       SELECT
