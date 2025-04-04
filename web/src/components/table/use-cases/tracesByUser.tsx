@@ -153,14 +153,14 @@ export default function TracesByUserTable({
       id: "id",
       size: 90,
       cell: ({ row }) => {
-        const value: string = row.getValue("id");
-        const projectId: string = row.getValue("projectId");
+        const value: string =
+          row.getValue("id") + "||" + row.getValue("projectId") + "||" + userId;
         const timestamp: Date = row.getValue("timestamp");
 
         return (
           <TableLink
-            path={`/project/${projectId}/traces/${encodeURIComponent(value)}?timestamp=${encodeURIComponent(timestamp.toISOString())}`}
-            value={value}
+            path={`/traces/${encodeURIComponent(value)}?timestamp=${encodeURIComponent(timestamp.toISOString())}`}
+            value={row.getValue("id")}
           />
         );
       },
@@ -186,21 +186,21 @@ export default function TracesByUserTable({
       header: "Project",
       id: "projectId",
       size: 150,
-      cell: ({ row }) => {
-        const value: string = row.getValue("projectId");
-        return <TableLink path={`/project/${value}`} value={value} />;
-      },
+      // cell: ({ row }) => {
+      //   const value: string = row.getValue("projectId");
+      //   return <TableLink path={`/project/${value}`} value={value} />;
+      // },
     },
-    {
-      accessorKey: "latency",
-      id: "latency",
-      header: "Latency",
-      size: 70,
-      cell: ({ row }) => {
-        const value: number | undefined = row.getValue("latency");
-        return value !== undefined ? formatIntervalSeconds(value) : "-";
-      },
-    },
+    // {
+    //   accessorKey: "latency",
+    //   id: "latency",
+    //   header: "Latency",
+    //   size: 70,
+    //   cell: ({ row }) => {
+    //     const value: number | undefined = row.getValue("latency");
+    //     return value !== undefined ? formatIntervalSeconds(value) : "-";
+    //   },
+    // },
     {
       accessorKey: "usage",
       header: "Usage",
