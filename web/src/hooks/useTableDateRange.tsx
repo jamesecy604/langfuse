@@ -18,7 +18,10 @@ export interface UseTableDateRangeOutput {
   ) => void;
 }
 
-export function useTableDateRange(projectId: string): UseTableDateRangeOutput {
+export function useTableDateRange(
+  id: string,
+  idType: "project" | "user" = "project",
+): UseTableDateRangeOutput {
   const [queryParams, setQueryParams] = useQueryParams({
     dateRange: withDefault(StringParam, "Select a date range"),
   });
@@ -32,7 +35,7 @@ export function useTableDateRange(projectId: string): UseTableDateRangeOutput {
 
   const [selectedOption, setSelectedOption] =
     useSessionStorage<TableDateRangeOptions>(
-      `tableDateRangeState-${projectId}`,
+      `tableDateRangeState-${idType}-${id}`,
       validatedInitialRangeOption,
     );
 

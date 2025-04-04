@@ -158,12 +158,18 @@ export class StringOptionsFilter implements Filter {
   apply(): ClickhouseFilter {
     const uid = clickhouseCompliantRandomCharacters();
     const varName = `stringOptionsFilter${uid}`;
+
+    // Ensure values are properly formatted strings
+    const formattedValues = this.values.map((v) =>
+      typeof v === "string" ? v : String(v),
+    );
+
     return {
       query:
         this.operator === "any of"
           ? `${this.tablePrefix ? this.tablePrefix + "." : ""}${this.field} IN ({${varName}: Array(String)})`
           : `${this.tablePrefix ? this.tablePrefix + "." : ""}${this.field} NOT IN ({${varName}: Array(String)})`,
-      params: { [varName]: this.values },
+      params: { [varName]: formattedValues },
     };
   }
 }
@@ -199,23 +205,29 @@ export class StringObjectFilter implements Filter {
     const varValueName = `stringObjectValueFilter${clickhouseCompliantRandomCharacters()}`;
     const column = `${this.tablePrefix ? this.tablePrefix + "." : ""}${this.field}`;
 
-    //  const query: `${column}['{varKeyName: String}'] ${this.operator} {${varValueName}: String}`,
+    // Handle nested paths by splitting on dots
+    const pathParts = this.key.split(".");
+    let jsonPath = "";
+    for (const part of pathParts) {
+      jsonPath += `['${part}']`;
+    }
+
     let query: string;
     switch (this.operator) {
       case "=":
-        query = `${column}[{${varKeyName}: String}] = {${varValueName}: String}`;
+        query = `JSONExtractString(${column}${jsonPath}) = {${varValueName}: String}`;
         break;
       case "contains":
-        query = `position(${column}[{${varKeyName}: String}], {${varValueName}: String}) > 0`;
+        query = `position(JSONExtractString(${column}${jsonPath}), {${varValueName}: String}) > 0`;
         break;
       case "does not contain":
-        query = `position(${column}[{${varKeyName}: String}], {${varValueName}: String}) = 0`;
+        query = `position(JSONExtractString(${column}${jsonPath}), {${varValueName}: String}) = 0`;
         break;
       case "starts with":
-        query = `startsWith(${column}[{${varKeyName}: String}], {${varValueName}: String})`;
+        query = `startsWith(JSONExtractString(${column}${jsonPath}), {${varValueName}: String})`;
         break;
       case "ends with":
-        query = `endsWith(${column}[{${varKeyName}: String}], {${varValueName}: String})`;
+        query = `endsWith(JSONExtractString(${column}${jsonPath}), {${varValueName}: String})`;
         break;
       default:
         throw new Error(`Unsupported operator: ${this.operator}`);

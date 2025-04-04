@@ -217,4 +217,30 @@ export const userRouter = createTRPCRouter({
         sumCalculatedTotalCost: result?.totalCost ?? 0,
       };
     }),
+
+  byIdByUser: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user?.id;
+      if (!userId) return null;
+
+      const metrics = await getUserMetricsByUser(userId, []);
+      const result = metrics.shift();
+
+      return {
+        userId: input.userId,
+        firstTrace: result?.minTimestamp,
+        lastTrace: result?.maxTimestamp,
+        totalTraces: result?.traceCount ?? 0,
+        totalPromptTokens: result?.inputUsage ?? 0,
+        totalCompletionTokens: result?.outputUsage ?? 0,
+        totalTokens: result?.totalUsage ?? 0,
+        totalObservations: result?.observationCount ?? 0,
+        sumCalculatedTotalCost: result?.totalCost ?? 0,
+      };
+    }),
 });

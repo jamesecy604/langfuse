@@ -50,6 +50,11 @@ export const ROUTES: Route[] = [
     menuNode: <CommandMenuTrigger />,
   },
   {
+    title: "My Usage & Cost",
+    pathname: "/users",
+    icon: UsersIcon,
+  },
+  {
     title: "Organizations",
     pathname: "/",
     icon: Grid2X2,

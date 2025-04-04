@@ -180,3 +180,40 @@ export function getProjectIdDefaultFilter(
     ]),
   };
 }
+
+export function getUserIdDefaultFilter(
+  userId: string,
+  opts: { tracesPrefix: string },
+): {
+  tracesFilter: FilterList;
+  scoresFilter: FilterList;
+  observationsFilter: FilterList;
+} {
+  return {
+    tracesFilter: new FilterList([
+      new StringFilter({
+        clickhouseTable: "traces",
+        field: "user_id",
+        operator: "=",
+        value: userId,
+        tablePrefix: opts.tracesPrefix,
+      }),
+    ]),
+    scoresFilter: new FilterList([
+      new StringFilter({
+        clickhouseTable: "scores",
+        field: "user_id",
+        operator: "=",
+        value: userId,
+      }),
+    ]),
+    observationsFilter: new FilterList([
+      new StringFilter({
+        clickhouseTable: "observations",
+        field: "user_id",
+        operator: "=",
+        value: userId,
+      }),
+    ]),
+  };
+}

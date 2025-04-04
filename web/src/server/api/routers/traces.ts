@@ -6,6 +6,7 @@ import {
   createTRPCRouter,
   protectedGetTraceProcedure,
   protectedProjectProcedure,
+  protectedProcedure,
 } from "@/src/server/api/trpc";
 import {
   BatchActionQuerySchema,
@@ -17,6 +18,7 @@ import {
   singleFilter,
   timeFilter,
   tracesTableUiColumnDefinitions,
+  type FilterState,
 } from "@langfuse/shared";
 import { type ObservationView } from "@langfuse/shared";
 import {
@@ -36,6 +38,9 @@ import {
   QueueJobs,
   TraceDeleteQueue,
   getTracesTableMetrics,
+  getTracesTableByUser,
+  getTracesTableCountByUser,
+  getTracesTableMetricsByUser,
 } from "@langfuse/shared/src/server";
 import { TRPCError } from "@trpc/server";
 import { randomUUID } from "crypto";
@@ -44,6 +49,14 @@ import { throwIfNoEntitlement } from "@/src/features/entitlements/server/hasEnti
 
 const TraceFilterOptions = z.object({
   projectId: z.string(), // Required for protectedProjectProcedure
+  searchQuery: z.string().nullable(),
+  filter: z.array(singleFilter).nullable(),
+  orderBy: orderBy,
+  ...paginationZod,
+});
+
+const TraceFilterByUserOptions = z.object({
+  userId: z.string(),
   searchQuery: z.string().nullable(),
   filter: z.array(singleFilter).nullable(),
   orderBy: orderBy,
@@ -412,6 +425,70 @@ export const traceRouter = createTRPCRouter({
         });
       }
     }),
+  allByUser: protectedProcedure
+    .input(TraceFilterByUserOptions)
+    .query(async ({ input, ctx }) => {
+      const traces = await getTracesTableByUser(
+        input.userId,
+        input.filter ?? [],
+        input.searchQuery ?? undefined,
+        input.orderBy,
+        input.limit,
+        input.page,
+      );
+      return { traces };
+    }),
+
+  metricsByUser: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        traceIds: z.array(z.string()),
+        filter: z.array(singleFilter).nullable(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      if (input.traceIds.length === 0) return [];
+      const res = await getTracesTableMetricsByUser({
+        userId: userId,
+        filter: [
+          ...(input.filter ?? []),
+          {
+            type: "stringOptions",
+            operator: "any of",
+            column: "ID",
+            value: input.traceIds.filter((id) => id && typeof id === "string"),
+          },
+          {
+            type: "string",
+            operator: "=",
+            column: "User ID",
+            value: input.userId,
+          },
+        ],
+      });
+
+      const scores = await getScoresForTraces({
+        projectId: "", //todo if need score
+        traceIds: res.map((r) => r.id),
+        limit: 1000,
+        offset: 0,
+      });
+
+      const validatedScores = filterAndValidateDbScoreList(
+        scores,
+        traceException,
+      );
+
+      return res.map((row) => ({
+        ...row,
+        scores: aggregateScores(
+          validatedScores.filter((s) => s.traceId === row.id),
+        ),
+      }));
+    }),
+
   updateTags: protectedProjectProcedure
     .input(
       z.object({
