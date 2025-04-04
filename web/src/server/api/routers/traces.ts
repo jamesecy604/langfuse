@@ -428,15 +428,22 @@ export const traceRouter = createTRPCRouter({
   allByUser: protectedProcedure
     .input(TraceFilterByUserOptions)
     .query(async ({ input, ctx }) => {
-      const traces = await getTracesTableByUser(
-        input.userId,
-        input.filter ?? [],
-        input.searchQuery ?? undefined,
-        input.orderBy,
-        input.limit,
-        input.page,
-      );
-      return { traces };
+      const [traces, totalCount] = await Promise.all([
+        getTracesTableByUser(
+          input.userId,
+          input.filter ?? [],
+          input.searchQuery ?? undefined,
+          input.orderBy,
+          input.limit,
+          input.page,
+        ),
+        getTracesTableCountByUser({
+          userId: input.userId,
+          filter: input.filter ?? [],
+          searchQuery: input.searchQuery ?? undefined,
+        }),
+      ]);
+      return { traces, totalCount };
     }),
 
   metricsByUser: protectedProcedure
