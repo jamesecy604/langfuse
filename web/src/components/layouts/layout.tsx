@@ -184,7 +184,13 @@ export default function Layout(props: PropsWithChildren) {
       return null;
 
     // check show function
-    if (route.show && !route.show({ organization: organization ?? undefined }))
+    if (
+      route.show &&
+      !route.show({
+        organization: organization ?? undefined,
+        session: session.data,
+      })
+    )
       return null;
 
     // apply to children as well

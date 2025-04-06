@@ -18,6 +18,7 @@ import {
 import { type ReactNode } from "react";
 import { type Entitlement } from "@/src/features/entitlements/constants/entitlements";
 import { type User } from "next-auth";
+import { useSession } from "next-auth/react";
 import { type OrganizationScope } from "@/src/features/rbac/constants/organizationAccessRights";
 import { SupportMenuDropdown } from "@/src/components/nav/support-menu-dropdown";
 import { SidebarMenuButton } from "@/src/components/ui/sidebar";
@@ -39,6 +40,7 @@ export type Route = {
   entitlements?: Entitlement[]; // entitlements required, array treated as OR
   show?: (p: {
     organization: User["organizations"][number] | undefined;
+    session: ReturnType<typeof useSession>["data"];
   }) => boolean;
 };
 
@@ -58,7 +60,19 @@ export const ROUTES: Route[] = [
     title: "Organizations",
     pathname: "/",
     icon: Grid2X2,
-    show: ({ organization }) => organization === undefined,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role !== "VIEWER";
+    },
+  },
+  {
+    title: "Project Settings",
+    pathname: "/",
+    icon: Grid2X2,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role === "VIEWER";
+    },
   },
   {
     title: "Projects",
@@ -154,6 +168,10 @@ export const ROUTES: Route[] = [
     pathname: "/project/[projectId]/settings",
     icon: Settings,
     bottom: true,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role !== "VIEWER";
+    },
   },
   {
     title: "My API Keys",
