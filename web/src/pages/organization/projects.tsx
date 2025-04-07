@@ -28,7 +28,7 @@ import { UsersOnboarding } from "@/src/components/onboarding/UsersOnboarding";
 import { Badge } from "@/src/components/ui/badge";
 
 type RowData = {
-  userId: string;
+  projectId: string;
   environment?: string;
   firstEvent: string;
   lastEvent: string;
@@ -37,21 +37,21 @@ type RowData = {
   totalCost: string;
 };
 
-export default function UsersPage() {
+export default function ProjectsPage() {
   // Check if any users exist by making a minimal allGlobal query
-  const { data: usersData, isLoading } = api.users.allGlobal.useQuery({
+  const { data: projectsData, isLoading } = api.projectTrace.all.useQuery({
     filter: [],
     page: 0,
     limit: 1,
   });
-  const hasAnyUser = true; //(usersData?.users?.length ?? 0) > 0;
+  const hasAnyProject = true; //(usersData?.users?.length ?? 0) > 0;
 
-  const showOnboarding = !isLoading && !hasAnyUser;
+  const showOnboarding = !isLoading && !hasAnyProject;
 
   return (
     <Page
       headerProps={{
-        title: "Users",
+        title: "Projects",
         help: {
           description:
             "Attribute data in Langfuse to a user by adding a userId to your traces. See docs to learn more.",
@@ -61,15 +61,15 @@ export default function UsersPage() {
       scrollable={showOnboarding}
     >
       {/* Show onboarding screen if user has no users */}
-      {showOnboarding ? <UsersOnboarding /> : <UsersTable />}
+      {showOnboarding ? <UsersOnboarding /> : <ProjectsTable />}
     </Page>
   );
 }
 
-const UsersTable = () => {
-  const [userFilterState, setUserFilterState] = useQueryFilterState(
+const ProjectsTable = () => {
+  const [projectFilterState, setProjectFilterState] = useQueryFilterState(
     [],
-    "users",
+    "projects",
   );
 
   const { setDetailPageList } = useDetailPageLists();
@@ -93,27 +93,27 @@ const UsersTable = () => {
       ]
     : [];
 
-  const filterState = userFilterState.concat(dateRangeFilter);
+  const filterState = projectFilterState.concat(dateRangeFilter);
 
   const [searchQuery, setSearchQuery] = useQueryParam(
     "search",
     withDefault(StringParam, null),
   );
 
-  const users = api.users.allGlobal.useQuery({
+  const projects = api.projectTrace.all.useQuery({
     filter: filterState,
     page: paginationState.pageIndex,
     limit: paginationState.pageSize,
     searchQuery: searchQuery ?? undefined,
   });
 
-  const userMetrics = api.users.metricsGlobal.useQuery(
+  const projectMetrics = api.projectTrace.metrics.useQuery(
     {
-      userIds: users.data?.users.map((u) => u.userId) ?? [],
+      projectIds: projects.data?.projects.map((u) => u.projectId) ?? [],
       filter: filterState,
     },
     {
-      enabled: users.isSuccess,
+      enabled: projects.isSuccess,
       trpc: {
         context: {
           skipBatch: true,
@@ -122,42 +122,44 @@ const UsersTable = () => {
     },
   );
 
-  type UserCoreOutput = RouterOutput["users"]["all"]["users"][number];
-  type UserMetricsOutput = RouterOutput["users"]["metrics"][number];
+  type ProjectCoreOutput = RouterOutput["projects"]["all"]["projects"][number];
+  type ProjectMetricsOutput = RouterOutput["projects"]["metrics"][number];
 
-  type CoreType = Omit<UserCoreOutput, "userId"> & { id: string };
-  type MetricType = Omit<UserMetricsOutput, "userId"> & { id: string };
+  type CoreType = Omit<ProjectCoreOutput, "projectId"> & { id: string };
+  type MetricType = Omit<ProjectMetricsOutput, "projectId"> & { id: string };
 
-  const userRowData = joinTableCoreAndMetrics<CoreType, MetricType>(
-    users.data?.users.map((u) => ({
+  const projectRowData = joinTableCoreAndMetrics<CoreType, MetricType>(
+    projects.data?.projects.map((u) => ({
       ...u,
-      id: u.userId,
+      id: u.projectId,
     })),
-    userMetrics.data?.map((u) => ({
+    projectMetrics.data?.map((u) => ({
       ...u,
-      id: u.userId,
+      id: u.projectId,
     })),
   );
 
-  const totalCount = users.data?.totalUsers
-    ? Number(users.data.totalUsers)
+  const totalCount = projects.data?.totalProjects
+    ? Number(projects.data.totalProjects)
     : null;
 
   useEffect(() => {
-    if (users.isSuccess) {
+    if (projects.isSuccess) {
       setDetailPageList(
-        "users",
-        users.data.users.map((u) => ({ id: encodeURIComponent(u.userId) })),
+        "projects",
+        projects.data.projects.map((u) => ({
+          id: encodeURIComponent(u.projectId),
+        })),
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [users.isSuccess, users.data]);
+  }, [projects.isSuccess, projects.data]);
 
   const columns: LangfuseColumnDef<RowData>[] = [
     {
-      accessorKey: "userId",
+      accessorKey: "projectId",
       enableColumnFilter: true,
-      header: "User ID",
+      header: "Project ID",
       headerTooltip: {
         description:
           "The unique identifier for the user that was logged in Langfuse. See docs for more details on how to set this up.",
@@ -165,11 +167,11 @@ const UsersTable = () => {
       },
       size: 150,
       cell: ({ row }) => {
-        const value: RowData["userId"] = row.getValue("userId");
+        const value: RowData["projectId"] = row.getValue("projectId");
         return typeof value === "string" ? (
           <>
             <TableLink
-              path={`/users/${encodeURIComponent(value)}`}
+              path={`/project/${encodeURIComponent(value)}/users`}
               value={value}
             />
           </>
@@ -203,7 +205,7 @@ const UsersTable = () => {
       size: 150,
       cell: ({ row }) => {
         const value: RowData["firstEvent"] = row.getValue("firstEvent");
-        if (!userMetrics.isSuccess) {
+        if (!projectMetrics.isSuccess) {
           return <Skeleton className="h-3 w-1/2" />;
         }
         if (typeof value === "string") {
@@ -220,7 +222,7 @@ const UsersTable = () => {
       size: 150,
       cell: ({ row }) => {
         const value: RowData["lastEvent"] = row.getValue("lastEvent");
-        if (!userMetrics.isSuccess) {
+        if (!projectMetrics.isSuccess) {
           return <Skeleton className="h-3 w-1/2" />;
         }
         if (typeof value === "string") {
@@ -239,7 +241,7 @@ const UsersTable = () => {
       size: 120,
       cell: ({ row }) => {
         const value: RowData["totalEvents"] = row.getValue("totalEvents");
-        if (!userMetrics.isSuccess) {
+        if (!projectMetrics.isSuccess) {
           return <Skeleton className="h-3 w-1/2" />;
         }
         if (typeof value === "string") {
@@ -258,7 +260,7 @@ const UsersTable = () => {
       size: 120,
       cell: ({ row }) => {
         const value: RowData["totalTokens"] = row.getValue("totalTokens");
-        if (!userMetrics.isSuccess) {
+        if (!projectMetrics.isSuccess) {
           return <Skeleton className="h-3 w-1/2" />;
         }
         if (typeof value === "string") {
@@ -276,7 +278,7 @@ const UsersTable = () => {
       size: 120,
       cell: ({ row }) => {
         const value: RowData["totalCost"] = row.getValue("totalCost");
-        if (!userMetrics.isSuccess) {
+        if (!projectMetrics.isSuccess) {
           return <Skeleton className="h-3 w-1/2" />;
         }
         if (typeof value === "string") {
@@ -290,8 +292,8 @@ const UsersTable = () => {
     <>
       <DataTableToolbar
         filterColumnDefinition={usersTableCols}
-        filterState={userFilterState}
-        setFilterState={useDebounce(setUserFilterState)}
+        filterState={projectFilterState}
+        setFilterState={useDebounce(setProjectFilterState)}
         columns={columns}
         selectedOption={selectedOption}
         setDateRangeAndOption={setDateRangeAndOption}
@@ -304,20 +306,20 @@ const UsersTable = () => {
       <DataTable
         columns={columns}
         data={
-          users.isLoading
+          projects.isLoading
             ? { isLoading: true, isError: false }
-            : users.isError
+            : projects.isError
               ? {
                   isLoading: false,
                   isError: true,
-                  error: users.error.message,
+                  error: projects.error.message,
                 }
               : {
                   isLoading: false,
                   isError: false,
-                  data: userRowData.rows?.map((t) => {
+                  data: projectRowData.rows?.map((t) => {
                     return {
-                      userId: t.id,
+                      projectId: t.id,
                       environment: t.environment ?? undefined,
                       firstEvent:
                         t.firstTrace?.toLocaleString() ?? "No event yet",

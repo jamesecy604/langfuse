@@ -16,6 +16,8 @@ import { sessionRouter } from "@/src/server/api/routers/sessions";
 import { promptRouter } from "@/src/features/prompts/server/routers/promptRouter";
 import { modelRouter } from "@/src/server/api/routers/models";
 
+import { projectTraceRouter } from "@/src/server/api/routers/projects";
+
 import { posthogIntegrationRouter } from "@/src/features/posthog-integration/posthog-integration-router";
 import { llmApiKeyRouter } from "@/src/features/llm-api-key/server/router";
 import { organizationsRouter } from "@/src/features/organizations/server/organizationRouter";
@@ -48,6 +50,7 @@ export const appRouter = createTRPCRouter({
   dashboard: dashboardRouter,
   organizations: organizationsRouter,
   projects: projectsRouter,
+  projectTrace: projectTraceRouter,
   users: userRouter,
   apiKeys: apiKeysRouter,
   userApiKeys: userApiKeysRouter,

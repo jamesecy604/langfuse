@@ -779,6 +779,262 @@ export const getUserMetrics = async (
   }));
 };
 
+export const getProjectMetrics = async (
+  projectIds: string[],
+  filter: FilterState,
+) => {
+  if (projectIds.length === 0) {
+    return [];
+  }
+
+  // filter state contains date range filter for traces so far.
+  const chFilter = new FilterList(
+    createFilterFromFilterState(filter, tracesTableUiColumnDefinitions),
+  );
+  const chFilterRes = chFilter.apply();
+
+  const timestampFilter = chFilter.find(
+    (f) => f.field === "timestamp" && f.operator === ">=",
+  );
+
+  // this query uses window functions on observations + traces to always get only the first row and thereby remove deduplicates
+  // we filter wherever possible by project id and user id
+  const query = `
+      WITH stats as (
+        SELECT
+            t.project_id as project_id,
+            anyLast(t.environment) as environment,
+            count(distinct o.id) as obs_count,
+            sumMap(usage_details) as sum_usage_details,
+            sum(total_cost) as sum_total_cost,
+            max(t.timestamp) as max_timestamp,
+            min(t.timestamp) as min_timestamp,
+            count(distinct t.id) as trace_count
+        FROM
+            (
+                SELECT
+                    o.project_id,
+                    o.trace_id,
+                    o.usage_details,
+                    o.total_cost,
+                    id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY id
+                        ORDER BY
+                            event_ts DESC
+                    ) AS rn
+                FROM
+                    observations o
+                WHERE
+                    ${timestampFilter ? `o.start_time >= {traceTimestamp: DateTime64(3)} - ${OBSERVATIONS_TO_TRACE_INTERVAL}` : ""}
+                    AND o.trace_id in (
+                        SELECT
+                            distinct id
+                        from
+                            traces
+                        where
+                            project_id IN ({projectIds: Array(String) })
+                            ${filter.length > 0 ? `AND ${chFilterRes.query}` : ""}
+                    )
+                    AND o.type = 'GENERATION'
+            ) as o
+            JOIN (
+                SELECT
+                    t.id,
+                    t.project_id,
+                    t.timestamp,
+                    t.environment,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY id
+                        ORDER BY
+                            event_ts DESC
+                    ) AS rn
+                FROM
+                    traces t
+                WHERE
+                    t.project_id IN ({projectIds: Array(String) })
+                    ${filter.length > 0 ? `AND ${chFilterRes.query}` : ""}
+            ) as t on t.id = o.trace_id
+            and t.project_id = o.project_id
+        WHERE
+            o.rn = 1
+            and t.rn = 1
+        group by
+            t.project_id
+    )
+    SELECT
+        arraySum(mapValues(mapFilter(x -> positionCaseInsensitive(x.1, 'input') > 0, sum_usage_details))) as input_usage,
+        arraySum(mapValues(mapFilter(x -> positionCaseInsensitive(x.1, 'output') > 0, sum_usage_details))) as output_usage,
+        sum_usage_details [ 'total' ] as total_usage,
+        obs_count,
+        trace_count,
+        project_id,
+        environment,
+        sum_total_cost,
+        max_timestamp,
+        min_timestamp
+    FROM
+        stats
+
+  `;
+
+  const rows = await queryClickhouse<{
+    project_id: string;
+    environment: string;
+    max_timestamp: string;
+    min_timestamp: string;
+    input_usage: string;
+    output_usage: string;
+    total_usage: string;
+    obs_count: string;
+    trace_count: string;
+    sum_total_cost: string;
+  }>({
+    query,
+    params: {
+      projectIds,
+      ...chFilterRes.params,
+      ...(timestampFilter
+        ? {
+            traceTimestamp: convertDateToClickhouseDateTime(
+              (timestampFilter as DateTimeFilter).value,
+            ),
+          }
+        : {}),
+    },
+    tags: {
+      feature: "tracing",
+      type: "trace",
+      kind: "analytic",
+    },
+  });
+
+  return rows.map((row) => ({
+    projectId: row.project_id,
+    environment: row.environment,
+    maxTimestamp: parseClickhouseUTCDateTimeFormat(row.max_timestamp),
+    minTimestamp: parseClickhouseUTCDateTimeFormat(row.min_timestamp),
+    inputUsage: Number(row.input_usage),
+    outputUsage: Number(row.output_usage),
+    totalUsage: Number(row.total_usage),
+    observationCount: Number(row.obs_count),
+    traceCount: Number(row.trace_count),
+    totalCost: Number(row.sum_total_cost),
+  }));
+};
+export const getTracesGroupedByProjects = async (
+  filter: FilterState,
+  searchQuery?: string,
+  limit?: number,
+  offset?: number,
+  columns?: UiColumnMappings,
+) => {
+  // const { tracesFilter } = getProjectIdDefaultFilter(projectId, {
+  //   tracesPrefix: "t",
+  // });
+
+  // tracesFilter.push(
+  //   ...createFilterFromFilterState(
+  //     filter,
+  //     columns ?? tracesTableUiColumnDefinitions,
+  //   ),
+  // );
+
+  // const tracesFilterRes = tracesFilter.apply();
+  const search = clickhouseSearchCondition(searchQuery);
+
+  // We mainly use queries like this to retrieve filter options.
+  // Therefore, we can skip final as some inaccuracy in count is acceptable.
+  const query = `
+      select 
+        project_id as project,
+        count(*) as count
+      from traces t
+      WHERE  t.project_id IS NOT NULL
+      AND t.project_id != ''
+      ${search.query}
+      GROUP BY project
+      ORDER BY count desc
+      ${limit !== undefined && offset !== undefined ? `LIMIT {limit: Int32} OFFSET {offset: Int32}` : ""}
+  `;
+
+  const rows = await queryClickhouse<{
+    project: string;
+    count: string;
+  }>({
+    query: query,
+    params: {
+      limit,
+      offset,
+      ...(searchQuery ? search.params : {}),
+    },
+    tags: {
+      feature: "tracing",
+      type: "trace",
+      kind: "analytic",
+    },
+  });
+
+  return rows;
+};
+export const getTotalProjectCount = async (
+  filter: FilterState,
+  searchQuery?: string,
+): Promise<{ totalCount: bigint }[]> => {
+  // const { tracesFilter } = getProjectIdDefaultFilter(projectId, {
+  //   tracesPrefix: "t",
+  // });
+
+  // tracesFilter.push(
+  //   ...createFilterFromFilterState(filter, tracesTableUiColumnDefinitions),
+  // );
+
+  // const tracesFilterRes = tracesFilter.apply();
+  const search = clickhouseSearchCondition(searchQuery);
+
+  const query = `
+    SELECT COUNT(DISTINCT t.project_id) AS totalCount
+    FROM traces t
+    WHERE t.project_id IS NOT NULL
+     AND t.project_id != ''
+    ${search.query}
+  `;
+
+  return queryClickhouse({
+    query,
+    params: {
+      ...search.params,
+    },
+    tags: {
+      feature: "tracing",
+      type: "trace",
+      kind: "analytic",
+    },
+  });
+};
+
+export const hasAnyProject = async () => {
+  const query = `
+    SELECT 1
+    FROM traces
+    WHERE  project_id IS NOT NULL
+    AND project_id != ''
+    LIMIT 1
+  `;
+
+  const rows = await queryClickhouse<{ 1: number }>({
+    query,
+    params: {},
+    tags: {
+      feature: "tracing",
+      type: "user",
+      kind: "hasAny",
+    },
+  });
+
+  return rows.length > 0;
+};
+
 export const getTracesGroupedByUser = async (
   userId: string,
   filter: FilterState,
