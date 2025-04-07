@@ -70,6 +70,15 @@ export const ROUTES: Route[] = [
     },
   },
   {
+    title: "Usage & Cost of Organization",
+    pathname: "/organization/users",
+    icon: Settings,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role === "OWNER";
+    },
+  },
+  {
     title: "Project Settings",
     pathname: "/",
     icon: Grid2X2,
@@ -113,6 +122,7 @@ export const ROUTES: Route[] = [
         title: "Observations",
         pathname: `/project/[projectId]/observations`,
       },
+
       // {
       //   title: "Scores",
       //   pathname: `/project/[projectId]/scores`,
