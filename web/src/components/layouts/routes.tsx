@@ -50,6 +50,10 @@ export const ROUTES: Route[] = [
     pathname: "", // Empty pathname since this is a dropdown
     icon: Search,
     menuNode: <CommandMenuTrigger />,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role !== "VIEWER";
+    },
   },
   {
     title: "My Usage & Cost",
@@ -83,11 +87,19 @@ export const ROUTES: Route[] = [
     title: "Dashboard",
     pathname: `/project/[projectId]`,
     icon: LayoutDashboard,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role !== "VIEWER";
+    },
   },
   {
     title: "Tracing",
     pathname: `/project/[projectId]/traces`,
     icon: ListTree,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role !== "VIEWER";
+    },
     items: [
       {
         title: "Traces",
@@ -132,6 +144,10 @@ export const ROUTES: Route[] = [
     title: "Users",
     pathname: `/project/[projectId]/users`,
     icon: UsersIcon,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role !== "VIEWER";
+    },
   },
   // {
   //   title: "Prompts",
