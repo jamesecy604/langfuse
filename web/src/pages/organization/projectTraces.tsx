@@ -169,14 +169,7 @@ const ProjectsTable = () => {
       size: 150,
       cell: ({ row }) => {
         const value: RowData["projectId"] = row.getValue("projectId");
-        return typeof value === "string" ? (
-          <>
-            <TableLink
-              path={`/project/${encodeURIComponent(value)}/users`}
-              value={value}
-            />
-          </>
-        ) : undefined;
+        return typeof value === "string" ? <>{value}</> : undefined;
       },
     },
     {
@@ -289,6 +282,16 @@ const ProjectsTable = () => {
     },
   ];
 
+  // Calculate totals
+  const totalTokens = projectMetrics.data?.reduce(
+    (sum, metric) => sum + Number(metric.totalTokens ?? 0),
+    0,
+  );
+  const totalCost = projectMetrics.data?.reduce(
+    (sum, metric) => sum + Number(metric.sumCalculatedTotalCost ?? 0),
+    0,
+  );
+
   return (
     <>
       <DataTableToolbar
@@ -346,6 +349,18 @@ const ProjectsTable = () => {
           state: paginationState,
         }}
       />
+      {projectMetrics.isSuccess && (
+        <div className="flex justify-end gap-4 p-2 text-sm">
+          <div>
+            <span className="font-medium">Total Tokens: </span>
+            {compactNumberFormatter(totalTokens ?? 0)}
+          </div>
+          <div>
+            <span className="font-medium">Total Cost: </span>
+            {usdFormatter(totalCost ?? 0, 2, 5)}
+          </div>
+        </div>
+      )}
     </>
   );
 };
