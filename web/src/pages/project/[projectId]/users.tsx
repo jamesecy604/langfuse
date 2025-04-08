@@ -392,6 +392,46 @@ const UsersTable = () => {
           options: environmentOptions.map((env) => ({ value: env })),
         }}
       />
+      <div className="mb-4 flex gap-4">
+        <div className="rounded-md border p-4">
+          <div className="text-sm font-medium text-muted-foreground">
+            Total Tokens
+          </div>
+          <div className="text-2xl font-semibold">
+            {users.isLoading || userMetrics.isLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              compactNumberFormatter(
+                Number(
+                  userRowData.rows?.reduce(
+                    (sum, row) => sum + BigInt(row.totalTokens ?? 0),
+                    BigInt(0),
+                  ) ?? BigInt(0),
+                ),
+              )
+            )}
+          </div>
+        </div>
+        <div className="rounded-md border p-4">
+          <div className="text-sm font-medium text-muted-foreground">
+            Total Cost
+          </div>
+          <div className="text-2xl font-semibold">
+            {users.isLoading || userMetrics.isLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              usdFormatter(
+                userRowData.rows?.reduce(
+                  (sum, row) => sum + Number(row.sumCalculatedTotalCost ?? 0),
+                  0,
+                ) ?? 0,
+                2,
+                5,
+              )
+            )}
+          </div>
+        </div>
+      </div>
       <DataTable
         columns={columns}
         data={
