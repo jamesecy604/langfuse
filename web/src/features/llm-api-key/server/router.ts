@@ -98,10 +98,13 @@ export const llmApiKeyRouter = createTRPCRouter({
         scope: "llmApiKeys:delete",
       });
 
-      await ctx.prisma.llmApiKeys.delete({
+      const deletedKey = await ctx.prisma.llmApiKeys.update({
         where: {
           id: input.id,
           projectId: input.projectId,
+        },
+        data: {
+          deletedAt: new Date(Date.now()),
         },
       });
 
@@ -109,7 +112,10 @@ export const llmApiKeyRouter = createTRPCRouter({
         session: ctx.session,
         resourceType: "llmApiKey",
         resourceId: input.id,
-        action: "delete",
+        action: "softDelete",
+        after: JSON.stringify({
+          deletedAt: deletedKey.deletedAt,
+        }),
       });
     }),
   all: protectedProjectProcedure
@@ -164,6 +170,7 @@ export const llmApiKeyRouter = createTRPCRouter({
             },
             where: {
               projectId: input.projectId,
+              deletedAt: null,
               ...getModelFilter(input.model),
             },
             distinct: ["id"],
@@ -173,6 +180,7 @@ export const llmApiKeyRouter = createTRPCRouter({
       const count = await ctx.prisma.llmApiKeys.count({
         where: {
           projectId: input.projectId,
+          deletedAt: null,
           ...getModelFilter(input.model),
         },
       });

@@ -211,9 +211,10 @@ model BackgroundMigration {
 }
 
 model LlmApiKeys {
-  id        String   @id @unique @default(cuid())
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  id        String    @id @unique @default(cuid())
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   provider          String
   adapter           String // This controls the interface that is used to connect with the LLM, e.g. 'openai' or 'anthropic'

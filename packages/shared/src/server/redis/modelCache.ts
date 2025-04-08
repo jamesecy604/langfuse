@@ -27,8 +27,10 @@ export class ModelCacheService {
       );
       await this.redis.expire(modelKey, env.TABLE_CACHE_TTL);
 
-      // Cache all LLM API keys
-      const apiKeys = await prisma.llmApiKeys.findMany();
+      // Cache all active LLM API keys (where deletedAt is null)
+      const apiKeys = await prisma.llmApiKeys.findMany({
+        where: { deletedAt: null },
+      });
       const apiKeyKey = `llmApiKeys:global`;
       await Promise.all(
         apiKeys.map((key: { id: string }) =>
@@ -69,11 +71,15 @@ export class ModelCacheService {
       const refreshedKeys = await this.redis.hvals(key);
       if (refreshedKeys.length === 0) return null;
       const parsedKeys = refreshedKeys.map((key) => JSON.parse(key));
-      return parsedKeys.filter((key) => key.projectId === projectId);
+      return parsedKeys.filter(
+        (key) => key.projectId === projectId && key.deletedAt === null,
+      );
     }
 
     const parsedKeys = cachedKeys.map((key) => JSON.parse(key));
-    return parsedKeys.filter((key) => key.projectId === projectId);
+    return parsedKeys.filter(
+      (key) => key.projectId === projectId && key.deletedAt === null,
+    );
   }
 
   async cacheProjectModel(model: Model): Promise<void> {
@@ -94,6 +100,15 @@ export class ModelCacheService {
 
   async cacheProjectApiKey(llmApiKey: LlmApiKeys): Promise<void> {
     try {
+      // Don't cache soft-deleted keys
+      if (llmApiKey.deletedAt) {
+        await this.redis.hdel(`llmApiKeys:global`, llmApiKey.id);
+        console.log(
+          `Removed soft-deleted LLM API key ${llmApiKey.id} from cache`,
+        );
+        return;
+      }
+
       const key = `llmApiKeys:global`;
       const result = await this.redis.hset(
         key,
