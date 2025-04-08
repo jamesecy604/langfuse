@@ -29,6 +29,7 @@ import { Badge } from "@/src/components/ui/badge";
 
 type RowData = {
   projectId: string;
+  projectName: string;
   environment?: string;
   firstEvent: string;
   lastEvent: string;
@@ -126,8 +127,14 @@ const ProjectsTable = () => {
     RouterOutput["projectTrace"]["all"]["projects"][number];
   type ProjectMetricsOutput = RouterOutput["projectTrace"]["metrics"][number];
 
-  type CoreType = Omit<ProjectCoreOutput, "projectId"> & { id: string };
-  type MetricType = Omit<ProjectMetricsOutput, "projectId"> & { id: string };
+  type CoreType = Omit<ProjectCoreOutput, "projectId"> & {
+    id: string;
+    name?: string;
+  };
+  type MetricType = Omit<ProjectMetricsOutput, "projectId"> & {
+    id: string;
+    name?: string;
+  };
 
   const projectRowData = joinTableCoreAndMetrics<CoreType, MetricType>(
     projects.data?.projects.map((u) => ({
@@ -157,6 +164,16 @@ const ProjectsTable = () => {
   }, [projects.isSuccess, projects.data]);
 
   const columns: LangfuseColumnDef<RowData>[] = [
+    {
+      accessorKey: "projectName",
+      enableColumnFilter: true,
+      header: "Project Name",
+      size: 150,
+      cell: ({ row }) => {
+        const value: RowData["projectName"] = row.getValue("projectName");
+        return typeof value === "string" ? <>{value}</> : undefined;
+      },
+    },
     {
       accessorKey: "projectId",
       enableColumnFilter: true,
@@ -324,6 +341,7 @@ const ProjectsTable = () => {
                   data: projectRowData.rows?.map((t) => {
                     return {
                       projectId: t.id,
+                      projectName: t.name ?? "Unknown",
                       environment: t.environment ?? undefined,
                       firstEvent:
                         t.firstTrace?.toLocaleString() ?? "No event yet",

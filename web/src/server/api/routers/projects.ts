@@ -89,7 +89,7 @@ export const projectTraceRouter = createTRPCRouter({
         filter: z.array(singleFilter).nullable(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       if (input.projectIds.length === 0) {
         return [];
       }
@@ -98,18 +98,35 @@ export const projectTraceRouter = createTRPCRouter({
         input.filter ?? [],
       );
 
-      return metrics.map((metric) => ({
-        projectId: metric.projectId,
-        environment: metric.environment,
-        firstTrace: metric.minTimestamp,
-        lastTrace: metric.maxTimestamp,
-        totalPromptTokens: BigInt(metric.inputUsage),
-        totalCompletionTokens: BigInt(metric.outputUsage),
-        totalTokens: BigInt(metric.totalUsage),
-        totalObservations: BigInt(metric.observationCount),
-        totalTraces: BigInt(metric.traceCount),
-        sumCalculatedTotalCost: metric.totalCost,
-      }));
+      // Get project names first
+      const projects = await ctx.prisma.project.findMany({
+        where: {
+          id: { in: input.projectIds },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      return metrics.map((metric) => {
+        const project = projects.find(
+          (p: { id: string }) => p.id === metric.projectId,
+        );
+        return {
+          projectId: metric.projectId,
+          name: project?.name ?? "Unknown",
+          environment: metric.environment,
+          firstTrace: metric.minTimestamp,
+          lastTrace: metric.maxTimestamp,
+          totalPromptTokens: BigInt(metric.inputUsage),
+          totalCompletionTokens: BigInt(metric.outputUsage),
+          totalTokens: BigInt(metric.totalUsage),
+          totalObservations: BigInt(metric.observationCount),
+          totalTraces: BigInt(metric.traceCount),
+          sumCalculatedTotalCost: metric.totalCost,
+        };
+      });
     }),
 
   // byId: protectedProjectProcedure
