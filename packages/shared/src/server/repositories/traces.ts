@@ -8,6 +8,7 @@ import {
 import {
   createFilterFromFilterState,
   getProjectIdDefaultFilter,
+  getProjectsDefaultFilter,
 } from "../queries/clickhouse-sql/factory";
 import { FilterState } from "../../types";
 import {
@@ -827,7 +828,7 @@ export const getProjectMetrics = async (
                     observations o
                 WHERE
                     1 = 1
-                    ${timestampFilter ? `o.start_time >= {traceTimestamp: DateTime64(3)} - ${OBSERVATIONS_TO_TRACE_INTERVAL}` : ""}
+                    ${timestampFilter ? `AND o.start_time >= {traceTimestamp: DateTime64(3)} - ${OBSERVATIONS_TO_TRACE_INTERVAL}` : ""}
                     AND o.trace_id in (
                         SELECT
                             distinct id
@@ -930,20 +931,23 @@ export const getTracesGroupedByProjects = async (
   offset?: number,
   columns?: UiColumnMappings,
 ) => {
-  // const { tracesFilter } = getProjectIdDefaultFilter(projectId, {
-  //   tracesPrefix: "t",
-  // });
+  const { tracesFilter } = getProjectsDefaultFilter({
+    tracesPrefix: "t",
+  });
 
-  // tracesFilter.push(
-  //   ...createFilterFromFilterState(
-  //     filter,
-  //     columns ?? tracesTableUiColumnDefinitions,
-  //   ),
-  // );
+  tracesFilter.push(
+    ...createFilterFromFilterState(
+      filter,
+      columns ?? tracesTableUiColumnDefinitions,
+    ),
+  );
 
-  // const tracesFilterRes = tracesFilter.apply();
+  const tracesFilterRes = tracesFilter.apply();
   const search = clickhouseSearchCondition(searchQuery);
-
+  console.log(
+    "==============================================",
+    tracesFilterRes,
+  );
   // We mainly use queries like this to retrieve filter options.
   // Therefore, we can skip final as some inaccuracy in count is acceptable.
   const query = `
@@ -953,6 +957,7 @@ export const getTracesGroupedByProjects = async (
       from traces t
     WHERE t.project_id IS NOT NULL
       AND t.project_id != ''
+       ${tracesFilterRes?.query ? `AND ${tracesFilterRes.query}` : ""}
       ${search.query ? search.query : ""}
       GROUP BY project
       ORDER BY count desc
@@ -967,6 +972,7 @@ export const getTracesGroupedByProjects = async (
     params: {
       limit,
       offset,
+      ...(tracesFilterRes ? tracesFilterRes.params : {}),
       ...(searchQuery ? search.params : {}),
     },
     tags: {
@@ -982,15 +988,15 @@ export const getTotalProjectCount = async (
   filter: FilterState,
   searchQuery?: string,
 ): Promise<{ totalCount: bigint }[]> => {
-  // const { tracesFilter } = getProjectIdDefaultFilter(projectId, {
-  //   tracesPrefix: "t",
-  // });
+  const { tracesFilter } = getProjectsDefaultFilter({
+    tracesPrefix: "t",
+  });
 
-  // tracesFilter.push(
-  //   ...createFilterFromFilterState(filter, tracesTableUiColumnDefinitions),
-  // );
+  tracesFilter.push(
+    ...createFilterFromFilterState(filter, tracesTableUiColumnDefinitions),
+  );
 
-  // const tracesFilterRes = tracesFilter.apply();
+  const tracesFilterRes = tracesFilter.apply();
   const search = clickhouseSearchCondition(searchQuery);
 
   const query = `
@@ -998,12 +1004,14 @@ export const getTotalProjectCount = async (
     FROM traces t
     WHERE t.project_id IS NOT NULL
      AND t.project_id != ''
+      ${tracesFilterRes?.query ? `AND ${tracesFilterRes.query}` : ""}
      ${search.query ? search.query : ""}
   `;
 
   return queryClickhouse({
     query,
     params: {
+      ...(tracesFilterRes ? tracesFilterRes.params : {}),
       ...search.params,
     },
     tags: {

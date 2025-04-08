@@ -144,6 +144,18 @@ const matchAndVerifyTracesUiColumn = (
   return uiTable;
 };
 
+export function getProjectsDefaultFilter(opts: { tracesPrefix: string }): {
+  tracesFilter: FilterList;
+  scoresFilter: FilterList;
+  observationsFilter: FilterList;
+} {
+  return {
+    tracesFilter: new FilterList([]),
+    scoresFilter: new FilterList([]),
+    observationsFilter: new FilterList([]),
+  };
+}
+
 export function getProjectIdDefaultFilter(
   projectId: string,
   opts: { tracesPrefix: string },

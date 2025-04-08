@@ -40,14 +40,14 @@ type RowData = {
 
 export default function ProjectsPage() {
   // Check if any users exist by making a minimal allGlobal query
-  const { data: projectsData, isLoading } = api.projectTrace.all.useQuery({
-    filter: [],
-    page: 0,
-    limit: 1,
-  });
-  const hasAnyProject = true; //(usersData?.users?.length ?? 0) > 0;
+  // const { data: projectsData, isLoading } = api.projectTrace.all.useQuery({
+  //   filter: [],
+  //   page: 0,
+  //   limit: 1,
+  // });
+  // const hasAnyProject = (projectsData?.projects?.length ?? 0) > 0;
 
-  const showOnboarding = !isLoading && !hasAnyProject;
+  const showOnboarding = false; // !isLoading && !hasAnyProject;
 
   return (
     <Page
