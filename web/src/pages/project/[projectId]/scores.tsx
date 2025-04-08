@@ -22,16 +22,15 @@ export default function ScoresPage() {
     },
   );
 
-  const showOnboarding = !isLoading && !hasAnyScore;
+  const showOnboarding = false; //!isLoading && !hasAnyScore;
 
   return (
     <Page
       headerProps={{
         title: "Scores",
         help: {
-          description:
-            "A scores is an evaluation of a traces or observations. It can be created from user feedback, model-based evaluations, or manual review. See docs to learn more.",
-          href: "https://langfuse.com/docs/scores",
+          description: "",
+          href: "",
         },
       }}
       scrollable={showOnboarding}

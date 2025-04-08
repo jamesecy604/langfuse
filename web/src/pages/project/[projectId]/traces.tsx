@@ -22,16 +22,15 @@ export default function Traces() {
     },
   );
 
-  const showOnboarding = !isLoading && !hasAnyTrace;
+  const showOnboarding = false; //!isLoading && !hasAnyTrace;
 
   return (
     <Page
       headerProps={{
         title: "Traces",
         help: {
-          description:
-            "A trace represents a single function/api invocation. Traces contain observations. See docs to learn more.",
-          href: "https://langfuse.com/docs/tracing",
+          description: "",
+          href: "",
         },
       }}
       scrollable={showOnboarding}

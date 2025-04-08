@@ -22,16 +22,15 @@ export default function Generations() {
     },
   );
 
-  const showOnboarding = !isLoading && !hasAnyTrace;
+  const showOnboarding = false; // !isLoading && !hasAnyTrace;
 
   return (
     <Page
       headerProps={{
         title: "Observations",
         help: {
-          description:
-            "An observation captures a single function call in an application. See docs to learn more.",
-          href: "https://langfuse.com/docs/tracing",
+          description: "",
+          href: "",
         },
       }}
       scrollable={showOnboarding}
