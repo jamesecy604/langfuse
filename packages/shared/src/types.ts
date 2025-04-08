@@ -28,6 +28,7 @@ export type FilterOption = {
 
 export type TableName =
   | "traces"
+  | "projects"
   | "generations"
   | "sessions"
   | "scores"

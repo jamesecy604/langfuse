@@ -45,7 +45,7 @@ export const projectTraceRouter = createTRPCRouter({
       return await hasAnyProject();
     }),
 
-  all: protectedProjectProcedure
+  all: protectedProcedure
     .input(ProjectAllOptions)
     .query(async ({ input, ctx }) => {
       // First get user list and total count
@@ -82,7 +82,7 @@ export const projectTraceRouter = createTRPCRouter({
       };
     }),
 
-  metrics: protectedProjectProcedure
+  metrics: protectedProcedure
     .input(
       z.object({
         projectIds: z.array(z.string().min(1)),

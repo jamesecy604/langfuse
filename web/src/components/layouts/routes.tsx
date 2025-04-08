@@ -71,7 +71,7 @@ export const ROUTES: Route[] = [
   },
   {
     title: "Usage & Cost of Organization",
-    pathname: "/organization/users",
+    pathname: "/organization/projectTraces",
     icon: Settings,
     show: ({ session }) => {
       const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;

@@ -19,7 +19,7 @@ import { api } from "@/src/utils/api";
 import { compactNumberFormatter, usdFormatter } from "@/src/utils/numbers";
 import { type RouterOutput } from "@/src/utils/types";
 import { type FilterState } from "@langfuse/shared";
-import { usersTableCols } from "@/src/server/api/definitions/usersTable";
+import { projectsTableCols } from "@/src/server/api/definitions/projectsTable";
 import { joinTableCoreAndMetrics } from "@/src/components/table/utils/joinTableCoreAndMetrics";
 import { useTableDateRange } from "@/src/hooks/useTableDateRange";
 import { useDebounce } from "@/src/hooks/useDebounce";
@@ -122,8 +122,9 @@ const ProjectsTable = () => {
     },
   );
 
-  type ProjectCoreOutput = RouterOutput["projects"]["all"]["projects"][number];
-  type ProjectMetricsOutput = RouterOutput["projects"]["metrics"][number];
+  type ProjectCoreOutput =
+    RouterOutput["projectTrace"]["all"]["projects"][number];
+  type ProjectMetricsOutput = RouterOutput["projectTrace"]["metrics"][number];
 
   type CoreType = Omit<ProjectCoreOutput, "projectId"> & { id: string };
   type MetricType = Omit<ProjectMetricsOutput, "projectId"> & { id: string };
@@ -291,14 +292,14 @@ const ProjectsTable = () => {
   return (
     <>
       <DataTableToolbar
-        filterColumnDefinition={usersTableCols}
+        filterColumnDefinition={projectsTableCols}
         filterState={projectFilterState}
         setFilterState={useDebounce(setProjectFilterState)}
         columns={columns}
         selectedOption={selectedOption}
         setDateRangeAndOption={setDateRangeAndOption}
         searchConfig={{
-          placeholder: "Search by user id",
+          placeholder: "Search by project id",
           updateQuery: setSearchQuery,
           currentQuery: searchQuery ?? undefined,
         }}

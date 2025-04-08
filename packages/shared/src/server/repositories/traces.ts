@@ -826,6 +826,7 @@ export const getProjectMetrics = async (
                 FROM
                     observations o
                 WHERE
+                    1 = 1
                     ${timestampFilter ? `o.start_time >= {traceTimestamp: DateTime64(3)} - ${OBSERVATIONS_TO_TRACE_INTERVAL}` : ""}
                     AND o.trace_id in (
                         SELECT
@@ -834,7 +835,7 @@ export const getProjectMetrics = async (
                             traces
                         where
                             project_id IN ({projectIds: Array(String) })
-                            ${filter.length > 0 ? `AND ${chFilterRes.query}` : ""}
+                            ${filter.length > 0 && chFilterRes.query ? `AND ${chFilterRes.query}` : ""}
                     )
                     AND o.type = 'GENERATION'
             ) as o
@@ -950,9 +951,9 @@ export const getTracesGroupedByProjects = async (
         project_id as project,
         count(*) as count
       from traces t
-      WHERE  t.project_id IS NOT NULL
+    WHERE t.project_id IS NOT NULL
       AND t.project_id != ''
-      ${search.query}
+      ${search.query ? search.query : ""}
       GROUP BY project
       ORDER BY count desc
       ${limit !== undefined && offset !== undefined ? `LIMIT {limit: Int32} OFFSET {offset: Int32}` : ""}
@@ -997,7 +998,7 @@ export const getTotalProjectCount = async (
     FROM traces t
     WHERE t.project_id IS NOT NULL
      AND t.project_id != ''
-    ${search.query}
+     ${search.query ? search.query : ""}
   `;
 
   return queryClickhouse({
