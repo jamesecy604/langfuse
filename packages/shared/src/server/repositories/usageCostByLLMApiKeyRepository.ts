@@ -1,8 +1,12 @@
 import { commandClickhouse, queryClickhouse } from "./clickhouse";
-import { createFilterFromFilterState } from "../queries/clickhouse-sql/factory";
+import {
+  createLLMApiKeyUsageFilterFromFilterState,
+  getLLMApiKeyDefaultFilter,
+} from "../queries/clickhouse-sql/factory";
 import { FilterState } from "../../types";
 import { FilterList } from "../queries/clickhouse-sql/clickhouse-filter";
 import { clickhouseSearchCondition } from "../queries/clickhouse-sql/search";
+import { llmApiKeyUsageTableUiColumnDefinitions } from "../../tableDefinitions/llmApiKeyUsageTable";
 
 export const getLLMApiKeyMetrics = async (
   llmApiKeyIds: string[],
@@ -12,8 +16,18 @@ export const getLLMApiKeyMetrics = async (
     return [];
   }
 
-  const chFilter = new FilterList(createFilterFromFilterState(filter, []));
-  const chFilterRes = chFilter.apply();
+  const { usageFilter } = getLLMApiKeyDefaultFilter({
+    tracesPrefix: "t",
+  });
+
+  usageFilter.push(
+    ...createLLMApiKeyUsageFilterFromFilterState(
+      filter,
+      llmApiKeyUsageTableUiColumnDefinitions,
+    ),
+  );
+
+  const chFilterRes = usageFilter.apply();
 
   const query = `
       SELECT 
@@ -49,14 +63,23 @@ export const getLLMApiKeyMetrics = async (
     cost: row.cost ? parseFloat(row.cost) : null,
   }));
 };
+
 export const getUsageGroupedByLLMApiKeys = async (
   filter: FilterState,
   searchQuery?: string,
   limit?: number,
   offset?: number,
 ) => {
-  const chFilter = new FilterList(createFilterFromFilterState(filter, []));
-  const chFilterRes = chFilter.apply();
+  const chFilter = new FilterList(
+    filter.length > 0
+      ? createLLMApiKeyUsageFilterFromFilterState(
+          filter,
+          llmApiKeyUsageTableUiColumnDefinitions,
+        )
+      : [],
+  );
+  const chFilterRes =
+    filter.length > 0 ? chFilter.apply() : { query: "", params: {} };
   const search = clickhouseSearchCondition(searchQuery);
 
   const query = `
@@ -100,12 +123,21 @@ export const getUsageGroupedByLLMApiKeys = async (
     cost: row.cost ? parseFloat(row.cost) : null,
   }));
 };
+
 export const getTotalLLMApiKeyCount = async (
   filter: FilterState,
   searchQuery?: string,
 ): Promise<{ totalCount: number }> => {
-  const chFilter = new FilterList(createFilterFromFilterState(filter, []));
-  const chFilterRes = chFilter.apply();
+  const chFilter = new FilterList(
+    filter.length > 0
+      ? createLLMApiKeyUsageFilterFromFilterState(
+          filter,
+          llmApiKeyUsageTableUiColumnDefinitions,
+        )
+      : [],
+  );
+  const chFilterRes =
+    filter.length > 0 ? chFilter.apply() : { query: "", params: {} };
   const search = clickhouseSearchCondition(searchQuery);
 
   const query = `

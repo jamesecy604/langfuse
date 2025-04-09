@@ -154,9 +154,9 @@ const LLMApiKeyUsageTable = (): ReactElement => {
     {
       accessorKey: "apiKeyName",
       enableColumnFilter: true,
-      header: "API Key",
+      header: "API Key Name",
       headerTooltip: {
-        description: "The display secret key of the LLM API key.",
+        description: "The display name/secret key of the LLM API key.",
         href: "",
       },
       size: 150,
@@ -180,9 +180,9 @@ const LLMApiKeyUsageTable = (): ReactElement => {
     },
     {
       accessorKey: "deletedAt",
-      header: "Status",
+      header: "Deleted At",
       headerTooltip: {
-        description: "Shows if the API key has been deleted.",
+        description: "When the API key was deleted, if applicable.",
         href: "",
       },
       size: 150,
@@ -193,7 +193,7 @@ const LLMApiKeyUsageTable = (): ReactElement => {
             <LocalIsoDate date={value} />
           </div>
         ) : (
-          <Badge variant="default">Active</Badge>
+          <Badge variant="outline">Active</Badge>
         );
       },
     },

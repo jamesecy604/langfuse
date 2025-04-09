@@ -127,9 +127,12 @@ export class DateTimeFilter implements Filter {
   apply(): ClickhouseFilter {
     const uid = clickhouseCompliantRandomCharacters();
     const varName = `dateTimeFilter${uid}`;
+    const dateValue = new Date(this.value);
     return {
       query: `${this.tablePrefix ? this.tablePrefix + "." : ""}${this.field} ${this.operator} {${varName}: DateTime64(3)}`,
-      params: { [varName]: new Date(this.value).getTime() },
+      params: {
+        [varName]: dateValue.toISOString().replace("T", " ").replace("Z", ""),
+      },
     };
   }
 }
