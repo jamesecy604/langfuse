@@ -44,9 +44,12 @@ export function GeneralSettings({
 
   const utils = api.useUtils();
   const router = useRouter();
+  const { update: updateSession } = useSession();
   const setDefaultProject = api.projects.setDefault.useMutation({
-    onSuccess: () => {
-      void utils.projects.invalidate();
+    onSuccess: async () => {
+      project.isDefault = true;
+      await updateSession();
+      await utils.projects.invalidate();
       toast.success("Project set as default", {
         description: "This project is now your default project",
       });
