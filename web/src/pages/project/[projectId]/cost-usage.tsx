@@ -28,6 +28,7 @@ type RawUsageItem = {
   provider: string;
   llmApiKeyId?: string;
   displaySecretKey: string;
+  deletedAt?: Date | null;
 };
 
 type UsageItem = {
@@ -36,6 +37,7 @@ type UsageItem = {
   provider: string;
   llmApiKeyId?: string;
   displaySecretKey: string;
+  deletedAt: Date | null;
 };
 
 type PaginatedUsageResponse = {
@@ -54,7 +56,8 @@ function normalizeUsageData(data: UsageResponse): UsageItem[] {
       cost: item.cost,
       provider: item.provider,
       llmApiKeyId: item.llmApiKeyId,
-      displaySecretKey: item.displaySecretKey, // Convert secretKey to displaySecretKey
+      displaySecretKey: item.displaySecretKey,
+      deletedAt: item.deletedAt ?? null,
     }));
   }
   return [
@@ -63,7 +66,8 @@ function normalizeUsageData(data: UsageResponse): UsageItem[] {
       cost: data.cost,
       provider: data.provider,
       llmApiKeyId: data.llmApiKeyId,
-      displaySecretKey: data.displaySecretKey, // Convert secretKey to displaySecretKey
+      displaySecretKey: data.displaySecretKey,
+      deletedAt: data.deletedAt ?? null,
     },
   ];
 }
@@ -117,6 +121,20 @@ export default function CostUsagePage() {
     {
       accessorKey: "displaySecretKey",
       header: "API Key",
+    },
+    {
+      accessorKey: "deletedAt",
+      header: "Status",
+      cell: ({ row }) => {
+        const deletedAt = row.getValue<Date | null>("deletedAt");
+        return deletedAt ? (
+          <span className="text-destructive">
+            Deleted at {deletedAt.toLocaleString()}
+          </span>
+        ) : (
+          <span className="text-success">Active</span>
+        );
+      },
     },
     {
       accessorKey: "tokens",

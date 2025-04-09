@@ -1,4 +1,5 @@
 export * from "./scores";
+export * from "./usageCostByLLMApiKeyRepository";
 export * from "./traces";
 export * from "./observations";
 export * from "./types";

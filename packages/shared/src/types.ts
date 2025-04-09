@@ -29,6 +29,7 @@ export type FilterOption = {
 export type TableName =
   | "traces"
   | "projects"
+  | "llmApiKeys"
   | "generations"
   | "sessions"
   | "scores"

@@ -79,6 +79,15 @@ export const ROUTES: Route[] = [
     },
   },
   {
+    title: "Usage & Cost By LLM Api key",
+    pathname: "/organization/usage-cost-llm-api-key",
+    icon: Settings,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role === "OWNER";
+    },
+  },
+  {
     title: "Project Settings",
     pathname: "/",
     icon: Grid2X2,
