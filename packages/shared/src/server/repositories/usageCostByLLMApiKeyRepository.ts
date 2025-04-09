@@ -5,7 +5,7 @@ import {
 } from "../queries/clickhouse-sql/factory";
 import { FilterState } from "../../types";
 import { FilterList } from "../queries/clickhouse-sql/clickhouse-filter";
-import { clickhouseSearchCondition } from "../queries/clickhouse-sql/search";
+import { clickhouseLLMApiKeySearchCondition } from "../queries/clickhouse-sql/search";
 import { llmApiKeyUsageTableUiColumnDefinitions } from "../../tableDefinitions/llmApiKeyUsageTable";
 
 export const getLLMApiKeyMetrics = async (
@@ -80,7 +80,7 @@ export const getUsageGroupedByLLMApiKeys = async (
   );
   const chFilterRes =
     filter.length > 0 ? chFilter.apply() : { query: "", params: {} };
-  const search = clickhouseSearchCondition(searchQuery);
+  const search = clickhouseLLMApiKeySearchCondition(searchQuery);
 
   const query = `
       SELECT 
@@ -138,7 +138,7 @@ export const getTotalLLMApiKeyCount = async (
   );
   const chFilterRes =
     filter.length > 0 ? chFilter.apply() : { query: "", params: {} };
-  const search = clickhouseSearchCondition(searchQuery);
+  const search = clickhouseLLMApiKeySearchCondition(searchQuery);
 
   const query = `
       SELECT COUNT(DISTINCT llm_api_key_id) as totalCount

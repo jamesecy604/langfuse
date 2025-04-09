@@ -18,3 +18,14 @@ export const clickhouseSearchCondition = (query?: string) => {
       : {},
   };
 };
+
+export const clickhouseLLMApiKeySearchCondition = (query?: string) => {
+  return {
+    query: query ? `AND llm_api_key_id ILIKE {searchString: String}` : "",
+    params: query
+      ? {
+          searchString: `${regexIndefiniteCharacters}${query}${regexIndefiniteCharacters}`,
+        }
+      : {},
+  };
+};
