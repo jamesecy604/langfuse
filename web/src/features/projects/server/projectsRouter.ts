@@ -138,7 +138,6 @@ export const projectsRouter = createTRPCRouter({
       z.object({
         projectId: z.string(),
         newName: projectNameSchema.shape.name,
-        isDefault: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -155,9 +154,53 @@ export const projectsRouter = createTRPCRouter({
         },
         data: {
           name: input.newName,
-          isDefault: input.isDefault,
         },
       });
+      await auditLog({
+        session: ctx.session,
+        resourceType: "project",
+        resourceId: input.projectId,
+        action: "update",
+        after: project,
+      });
+      return true;
+    }),
+
+  setDefault: protectedProjectProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      throwIfNoProjectAccess({
+        session: ctx.session,
+        projectId: input.projectId,
+        scope: "project:update",
+      });
+
+      // First set all projects in org to not default
+      await ctx.prisma.project.updateMany({
+        where: {
+          orgId: ctx.session.orgId,
+          isDefault: true,
+        },
+        data: {
+          isDefault: false,
+        },
+      });
+
+      // Then set the specified project as default
+      const project = await ctx.prisma.project.update({
+        where: {
+          id: input.projectId,
+          orgId: ctx.session.orgId,
+        },
+        data: {
+          isDefault: true,
+        },
+      });
+
       await auditLog({
         session: ctx.session,
         resourceType: "project",

@@ -13,7 +13,6 @@ import {
   FormMessage,
 } from "@/src/components/ui/form";
 import { projectNameSchema } from "@/src/features/auth/lib/projectNameSchema";
-import { Checkbox } from "@/src/components/ui/checkbox";
 import Header from "@/src/components/layouts/header";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
 import { LockIcon } from "lucide-react";
@@ -30,13 +29,10 @@ export default function RenameProject() {
     scope: "project:update",
   });
 
-  const form = useForm<
-    z.infer<typeof projectNameSchema> & { isDefault: boolean }
-  >({
+  const form = useForm<z.infer<typeof projectNameSchema>>({
     resolver: zodResolver(projectNameSchema),
     defaultValues: {
       name: "",
-      isDefault: project?.isDefault ?? false,
     },
   });
   const renameProject = api.projects.update.useMutation({
@@ -54,7 +50,6 @@ export default function RenameProject() {
       .mutateAsync({
         projectId: project.id,
         newName: values.name,
-        isDefault: values.isDefault,
       })
       .then(() => {
         form.reset();
@@ -112,43 +107,11 @@ export default function RenameProject() {
             />
             {hasAccess && (
               <>
-                <FormField
-                  control={form.control}
-                  name="isDefault"
-                  render={({ field }) => (
-                    <FormItem className="mt-4 flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={!hasAccess || !project?.isDefault}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <label className="text-sm font-medium leading-none">
-                          Default Project
-                        </label>
-                        <p className="text-sm text-muted-foreground">
-                          {project?.isDefault
-                            ? "Uncheck to remove default status"
-                            : "Only default projects can change this setting"}
-                        </p>
-                      </div>
-                    </FormItem>
-                  )}
-                />
                 <Button
                   variant="secondary"
                   type="submit"
                   loading={renameProject.isLoading}
-                  disabled={
-                    !(
-                      (form.getValues().name !== "" ||
-                        (form.getValues().isDefault !== project?.isDefault &&
-                          form.getValues().name !== "")) &&
-                      hasAccess
-                    )
-                  }
+                  disabled={!(form.getValues().name !== "" && hasAccess)}
                   className="mt-6"
                 >
                   Save

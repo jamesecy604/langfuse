@@ -7,6 +7,10 @@ import { DeleteProjectButton } from "@/src/features/projects/components/DeletePr
 import Header from "@/src/components/layouts/header";
 import ConfigureRetention from "@/src/features/projects/components/ConfigureRetention";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/router";
+import { api } from "@/src/utils/api";
+import { Button } from "@/src/components/ui/button";
+import { toast } from "sonner";
 
 export function GeneralSettings({
   baseUrl,
@@ -14,7 +18,7 @@ export function GeneralSettings({
   organization,
   showRetentionSettings,
 }: {
-  project: { id: string; name: string };
+  project: { id: string; name: string; isDefault?: boolean };
   organization: { id: string; name: string };
   showRetentionSettings: boolean;
   baseUrl?: string;
@@ -38,9 +42,37 @@ export function GeneralSettings({
     );
   }
 
+  const utils = api.useUtils();
+  const router = useRouter();
+  const setDefaultProject = api.projects.setDefault.useMutation({
+    onSuccess: () => {
+      void utils.projects.invalidate();
+      toast.success("Project set as default", {
+        description: "This project is now your default project",
+      });
+      router.replace(router.asPath);
+    },
+    onError: (error) => {
+      toast.error("Error setting default project", {
+        description: error.message,
+      });
+    },
+  });
+
   return (
     <div className="flex flex-col gap-6">
       {/* <HostNameProject /> */}
+      {project.isDefault === false && (
+        <div>
+          <Header title="Default Project" />
+          <Button
+            onClick={() => setDefaultProject.mutate({ projectId: project.id })}
+            loading={setDefaultProject.isLoading}
+          >
+            Set as Default
+          </Button>
+        </div>
+      )}
       <RenameProject />
       {showRetentionSettings && <ConfigureRetention />}
       <div>
