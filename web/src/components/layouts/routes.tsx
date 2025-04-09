@@ -59,18 +59,14 @@ export const ROUTES: Route[] = [
     title: "My Usage & Cost",
     pathname: "/users",
     icon: UsersIcon,
-  },
-  {
-    title: "Organizations",
-    pathname: "/",
-    icon: Grid2X2,
     show: ({ session }) => {
       const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
-      return role !== "VIEWER";
+      return role === "VIEWER";
     },
   },
+
   {
-    title: "Usage & Cost of Organization",
+    title: "Usage & Cost By Project",
     pathname: "/organization/projectTraces",
     icon: Settings,
     show: ({ session }) => {
@@ -85,6 +81,15 @@ export const ROUTES: Route[] = [
     show: ({ session }) => {
       const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
       return role === "OWNER";
+    },
+  },
+  {
+    title: "Organizations",
+    pathname: "/",
+    icon: Grid2X2,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role !== "VIEWER";
     },
   },
   {
