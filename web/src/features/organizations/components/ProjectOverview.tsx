@@ -52,7 +52,14 @@ const OrganizationProjectTiles = ({
         .map((project) => (
           <Card key={project.id}>
             <CardHeader>
-              <CardTitle className="text-base">{project.name}</CardTitle>
+              <CardTitle className="text-base">
+                {project.name}
+                {project.isDefault && (
+                  <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
+                    Default
+                  </span>
+                )}
+              </CardTitle>
             </CardHeader>
             {!project.deletedAt ? (
               <CardFooter className="gap-2">
