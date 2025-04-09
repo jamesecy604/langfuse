@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   createTRPCRouter,
   protectedProjectProcedure,
+  protectedProcedure,
 } from "@/src/server/api/trpc";
 import { paginationZod, singleFilter } from "@langfuse/shared";
 import {
@@ -27,7 +28,7 @@ export const usageCostByLLMApiKeyRouter = createTRPCRouter({
     return await hasAnyLLMApiKey();
   }),
 
-  all: protectedProjectProcedure
+  all: protectedProcedure
     .input(LlmApiKeyAllOptions)
     .query(async ({ input, ctx }) => {
       const [usageList, totalCount] = await Promise.all([
@@ -49,7 +50,7 @@ export const usageCostByLLMApiKeyRouter = createTRPCRouter({
       };
     }),
 
-  metrics: protectedProjectProcedure
+  metrics: protectedProcedure
     .input(
       z.object({
         llmApiKeyIds: z.array(z.string().min(1)),
@@ -57,6 +58,42 @@ export const usageCostByLLMApiKeyRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input, ctx }) => {
-      return await getLLMApiKeyMetrics(input.llmApiKeyIds, input.filter ?? []);
+      const metrics = await getLLMApiKeyMetrics(
+        input.llmApiKeyIds,
+        input.filter ?? [],
+      );
+
+      // Get API key details from PostgreSQL
+      const apiKeys = await ctx.prisma.llmApiKeys.findMany({
+        where: {
+          id: { in: input.llmApiKeyIds },
+        },
+        select: {
+          id: true,
+          displaySecretKey: true,
+          deletedAt: true,
+          createdAt: true,
+          projectId: true,
+          project: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      return metrics.map((metric) => {
+        const apiKey = apiKeys.find(
+          (k: { id: string }) => k.id === metric.llmApiKeyId,
+        );
+        return {
+          ...metric,
+          displaySecretKey: apiKey?.displaySecretKey,
+          deletedAt: apiKey?.deletedAt,
+          createdAt: apiKey?.createdAt,
+          projectId: apiKey?.projectId,
+          projectName: apiKey?.project?.name,
+        };
+      });
     }),
 });

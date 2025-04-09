@@ -24,12 +24,17 @@ import { useDebounce } from "@/src/hooks/useDebounce";
 import Page from "@/src/components/layouts/page";
 import { joinTableCoreAndMetrics } from "@/src/components/table/utils/joinTableCoreAndMetrics";
 import { Badge } from "@/src/components/ui/badge";
+import { LocalIsoDate } from "@/src/components/LocalIsoDate";
 
 type RowData = {
   apiKeyId: string;
   apiKeyName: string;
+  projectId: string;
+  projectName?: string;
+  createdAt?: Date;
   totalTokens: string;
   totalCost: string;
+  deletedAt?: Date | null;
 };
 
 export default function LLMApiKeyUsagePage() {
@@ -149,15 +154,47 @@ const LLMApiKeyUsageTable = (): ReactElement => {
     {
       accessorKey: "apiKeyName",
       enableColumnFilter: true,
-      header: "API Key Name",
+      header: "API Key",
       headerTooltip: {
-        description: "The name of the LLM API key.",
+        description: "The display secret key of the LLM API key.",
         href: "",
       },
       size: 150,
       cell: ({ row }) => {
         const value: RowData["apiKeyName"] = row.getValue("apiKeyName");
         return typeof value === "string" ? <>{value}</> : undefined;
+      },
+    },
+    {
+      accessorKey: "createdAt",
+      header: "Created At",
+      headerTooltip: {
+        description: "When the API key was created.",
+        href: "",
+      },
+      size: 150,
+      cell: ({ row }) => {
+        const value: Date = row.getValue("createdAt");
+        return <LocalIsoDate date={value} />;
+      },
+    },
+    {
+      accessorKey: "deletedAt",
+      header: "Status",
+      headerTooltip: {
+        description: "Shows if the API key has been deleted.",
+        href: "",
+      },
+      size: 150,
+      cell: ({ row }) => {
+        const value: Date | null | undefined = row.getValue("deletedAt");
+        return value ? (
+          <div className="text-red-500">
+            <LocalIsoDate date={value} />
+          </div>
+        ) : (
+          <Badge variant="default">Active</Badge>
+        );
       },
     },
     {
@@ -172,6 +209,32 @@ const LLMApiKeyUsageTable = (): ReactElement => {
       cell: ({ row }) => {
         const value: RowData["apiKeyId"] = row.getValue("apiKeyId");
         return typeof value === "string" ? <>{value}</> : undefined;
+      },
+    },
+    {
+      accessorKey: "projectId",
+      header: "Project ID",
+      headerTooltip: {
+        description: "The ID of the project this API key belongs to.",
+        href: "",
+      },
+      size: 150,
+      cell: ({ row }) => {
+        const value: RowData["projectId"] = row.getValue("projectId");
+        return typeof value === "string" ? <>{value}</> : "Unknown";
+      },
+    },
+    {
+      accessorKey: "projectName",
+      header: "Project",
+      headerTooltip: {
+        description: "The project this API key belongs to.",
+        href: "",
+      },
+      size: 150,
+      cell: ({ row }) => {
+        const value: RowData["projectName"] = row.getValue("projectName");
+        return typeof value === "string" ? <>{value}</> : "Unknown";
       },
     },
     {
@@ -254,7 +317,11 @@ const LLMApiKeyUsageTable = (): ReactElement => {
                   data: apiKeyRowData.rows?.map((k) => {
                     return {
                       apiKeyId: k.id,
-                      apiKeyName: k.name ?? "Unknown",
+                      apiKeyName: k.displaySecretKey ?? "Unknown",
+                      projectId: k.projectId ?? "Unknown",
+                      projectName: k.projectName ?? "Unknown",
+                      createdAt: k.createdAt,
+                      deletedAt: k.deletedAt,
                       totalTokens: compactNumberFormatter(
                         Number(k.tokens ?? 0),
                       ),
