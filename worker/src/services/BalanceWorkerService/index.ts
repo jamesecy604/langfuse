@@ -100,12 +100,12 @@ export class BalanceWorkerService {
     const hasExistingBalance = json.length > 0;
 
     if (hasExistingBalance) {
-      // Update existing balance
+      // Update existing balance - for refunds we already have negative amount
       await clickhouse.query({
         query: `
           ALTER TABLE current_balance
           UPDATE
-            balance = balance + ${type === "topup" ? amount : -amount},
+            balance = balance + ${amount},
             updatedAt = parseDateTimeBestEffort({updatedAt:String})
           WHERE userId = {userId:String}
         `,
@@ -115,13 +115,13 @@ export class BalanceWorkerService {
         },
       });
     } else {
-      // Insert new balance
+      // Insert new balance - for refunds we already have negative amount
       await clickhouse.insert({
         table: "current_balance",
         values: [
           {
             userId,
-            balance: type === "topup" ? amount : -amount,
+            balance: amount,
             updatedAt: now,
           },
         ],

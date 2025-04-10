@@ -93,13 +93,33 @@ export const paymentsRouter = createTRPCRouter({
     .input(
       z.object({
         transactionId: z.string(),
-        amount: z.number().min(1),
+        amount: z.number(),
         reason: z.string().default(""),
+        paymentIntentId: z.string().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { transactionId, amount, reason } = input;
+      const { transactionId, amount, reason, paymentIntentId } = input;
       const userId = ctx.session.user.id;
+
+      // Create Stripe refund if paymentIntentId is provided
+      if (paymentIntentId) {
+        try {
+          await stripe.refunds.create({
+            payment_intent: paymentIntentId,
+            amount: Math.round(Math.abs(amount) * 100), // Convert to cents and ensure positive
+            reason: reason
+              ? (reason as Stripe.RefundCreateParams.Reason)
+              : undefined,
+          });
+        } catch (error) {
+          console.error("Failed to create Stripe refund:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to process refund with Stripe",
+          });
+        }
+      }
 
       const balanceService = new BalanceService();
       await balanceService.refund(userId, transactionId, amount, reason || "");

@@ -40,7 +40,7 @@ export function RefundBalanceDialog({
 
       await refund({
         transactionId,
-        amount: amountNum,
+        amount: -amountNum, // Pass negative amount for refunds
         reason,
       });
 
