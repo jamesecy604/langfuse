@@ -204,12 +204,22 @@ export class BalanceRepository {
 
       if (from) {
         query += ` AND t.timestamp >= {from:DateTime}`;
-        params.from = from;
+        // Format as YYYY-MM-DD HH:MM:SS without milliseconds
+        params.from = from
+          .toISOString()
+          .replace("T", " ")
+          .replace("Z", "")
+          .split(".")[0];
       }
 
       if (to) {
         query += ` AND t.timestamp <= {to:DateTime}`;
-        params.to = to;
+        // Format as YYYY-MM-DD HH:MM:SS without milliseconds
+        params.to = to
+          .toISOString()
+          .replace("T", " ")
+          .replace("Z", "")
+          .split(".")[0];
       }
 
       query += ` ORDER BY t.timestamp DESC LIMIT 100`;
