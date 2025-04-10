@@ -408,6 +408,49 @@ export class BalanceRepository {
     return false;
   }
 
+  async getAllBalancesFromClickHouse(): Promise<
+    Array<{
+      userId: string;
+      current: number;
+      totalTopups: number;
+      totalUsage: number;
+    }>
+  > {
+    const clickhouse = await this.getClickhouse();
+    const result = await clickhouse.query({
+      query: `
+        SELECT 
+          userId,
+          balance as current,
+          0 as totalTopups,
+          0 as totalUsage
+        FROM current_balance
+      `,
+      format: "JSON",
+    });
+
+    const response = await result.json();
+    return response.data.map((row: any) => ({
+      userId: row.userId,
+      current: parseFloat(row.current),
+      totalTopups: parseFloat(row.totalTopups),
+      totalUsage: parseFloat(row.totalUsage),
+    }));
+  }
+
+  async syncAllBalancesToRedis() {
+    const balances = await this.getAllBalancesFromClickHouse();
+    for (const balance of balances) {
+      await this.initRedisBalance(
+        balance.userId,
+        balance.current,
+        balance.totalTopups,
+        balance.totalUsage,
+      );
+    }
+    return balances.length;
+  }
+
   async getBalanceDetails(userId: string): Promise<{
     current: number;
     totalTopups: number;

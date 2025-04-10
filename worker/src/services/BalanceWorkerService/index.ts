@@ -70,21 +70,18 @@ export class BalanceWorkerService {
       throw new Error("ClickHouse client not available");
     }
     const now = new Date();
+    // Format timestamp without milliseconds for ClickHouse compatibility
+    const timestamp = new Date(now.toISOString().split(".")[0] + "Z");
 
     // Insert to appropriate transaction table
     await clickhouse.insert({
-      table:
-        type === "usage"
-          ? "totalUsage"
-          : type === "topup"
-            ? "totalUsage"
-            : "totalUsage", //todo in the future, maybe we have 3 tables: topup, refund and totalUsage
+      table: "totalUsage",
       values: [
         {
           id: crypto.randomUUID(),
           userId,
           amount,
-          timestamp: now,
+          timestamp: timestamp,
           description: "System transaction",
           type: type,
         },
@@ -109,7 +106,7 @@ export class BalanceWorkerService {
           ALTER TABLE current_balance
           UPDATE
             balance = balance + ${type === "topup" ? amount : -amount},
-            updatedAt = parseDateTime64BestEffort({updatedAt:String})
+            updatedAt = parseDateTimeBestEffort({updatedAt:String})
           WHERE userId = {userId:String}
         `,
         query_params: {
