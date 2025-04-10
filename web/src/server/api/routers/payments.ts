@@ -94,4 +94,33 @@ export const paymentsRouter = createTRPCRouter({
 
       return { success: true };
     }),
+
+  createPaymentIntent: protectedProcedure
+    .input(
+      z.object({
+        amount: z.number().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { amount } = input;
+      const userId = ctx.session.user.id;
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount * 100, // Convert to cents
+        currency: "usd",
+        metadata: {
+          userId,
+          type: "topup",
+        },
+      });
+
+      if (!paymentIntent.client_secret) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create payment intent",
+        });
+      }
+
+      return { clientSecret: paymentIntent.client_secret };
+    }),
 });
