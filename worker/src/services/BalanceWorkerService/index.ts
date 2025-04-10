@@ -34,8 +34,13 @@ export class BalanceWorkerService {
     );
 
     try {
+      // Map transaction type to CREDIT/DEBIT for ClickHouse
+
+      const clickHouseAmount =
+        type === "topup" ? Math.abs(amount) : -Math.abs(amount);
+
       console.log(`[BalanceWorker] Updating ClickHouse balance...`);
-      await this.updateClickHouseBalance(userId, amount, type);
+      await this.updateClickHouseBalance(userId, clickHouseAmount, type);
       console.log(`[BalanceWorker] ClickHouse update completed`);
 
       logger.info(`Processed ClickHouse balance transaction`, {
@@ -58,7 +63,7 @@ export class BalanceWorkerService {
   private async updateClickHouseBalance(
     userId: string,
     amount: number,
-    type: "CREDIT" | "DEBIT",
+    type: "topup" | "refund" | "usage",
   ) {
     const clickhouse = clickhouseClient();
     if (!clickhouse) {
@@ -68,7 +73,12 @@ export class BalanceWorkerService {
 
     // Insert to appropriate transaction table
     await clickhouse.insert({
-      table: type === "CREDIT" ? "topup" : "totalUsage",
+      table:
+        type === "usage"
+          ? "totalUsage"
+          : type === "topup"
+            ? "totalUsage"
+            : "totalUsage", //todo in the future, maybe we have 3 tables: topup, refund and totalUsage
       values: [
         {
           id: crypto.randomUUID(),
@@ -76,6 +86,7 @@ export class BalanceWorkerService {
           amount,
           timestamp: now,
           description: "System transaction",
+          type: type,
         },
       ],
       format: "JSONEachRow",
@@ -97,7 +108,7 @@ export class BalanceWorkerService {
         query: `
           ALTER TABLE current_balance
           UPDATE
-            balance = balance + ${type === "CREDIT" ? amount : -amount},
+            balance = balance + ${type === "topup" ? amount : -amount},
             updatedAt = parseDateTime64BestEffort({updatedAt:String})
           WHERE userId = {userId:String}
         `,
@@ -113,7 +124,7 @@ export class BalanceWorkerService {
         values: [
           {
             userId,
-            balance: type === "CREDIT" ? amount : -amount,
+            balance: type === "topup" ? amount : -amount,
             updatedAt: now,
           },
         ],

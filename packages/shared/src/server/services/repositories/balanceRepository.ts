@@ -121,7 +121,7 @@ export class BalanceRepository {
 
         // Calculate new values
         const newBalance =
-          type === "refund" || type === "usage"
+          type === "topup"
             ? initialBalance + Math.abs(amount)
             : initialBalance - Math.abs(amount);
 
@@ -326,13 +326,14 @@ export class BalanceRepository {
           multi.exists(key);
 
           // Convert amount for DEBIT transactions (negative amount should subtract)
-          const adjustedAmount = type === "topup" ? Math.abs(amount) : amount;
+          const adjustedAmount =
+            type === "refund" || type === "usage" ? Math.abs(amount) : amount;
 
           // Update current balance
           multi.hincrbyfloat(key, BALANCE_DETAILS.CURRENT, adjustedAmount);
 
           // Update totals based on transaction type
-          if (type === "refund" || type === "usage") {
+          if (type === "topup") {
             multi.hincrbyfloat(key, BALANCE_DETAILS.TOTAL_TOPUPS, amount);
           } else {
             multi.hincrbyfloat(

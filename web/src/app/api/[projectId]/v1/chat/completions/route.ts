@@ -302,7 +302,7 @@ export async function POST(
             await balanceService.updateBalance(
               apiKeyRecord.userId!,
               costDetail.inputCost + costDetail.outputCost,
-              "DEBIT",
+              "usage",
               `Chat completion tokens for model ${model}`,
             );
 
@@ -423,7 +423,7 @@ export async function POST(
         await balanceService.updateBalance(
           apiKeyRecord.userId!,
           -(costDetail.inputCost + costDetail.outputCost),
-          "DEBIT",
+          "usage",
           `Chat completion tokens for model ${model}`,
         );
 

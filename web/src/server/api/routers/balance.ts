@@ -22,7 +22,7 @@ export const balanceRouter = createTRPCRouter({
       return balanceService.updateBalance(
         input.userId,
         input.amount,
-        "CREDIT",
+        "topup",
         input.description,
       );
     }),

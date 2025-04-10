@@ -89,7 +89,10 @@ export class BalanceService implements IBalanceService {
       projectId: this.projectId,
       transactionId: `${userId}-${Date.now()}`,
       userId,
-      amount: type === "topup" ? -Math.abs(amount) : Math.abs(amount),
+      amount:
+        type === "refund" || type === "usage"
+          ? -Math.abs(amount)
+          : Math.abs(amount),
       type,
       description,
     };
