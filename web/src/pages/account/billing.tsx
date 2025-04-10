@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { DateRangePicker } from "@/src/components/date-range-picker";
 import { DataTable } from "@/src/components/table/data-table";
 import { type LangfuseColumnDef } from "@/src/components/table/types";
+import { RefundBalanceDialog } from "@/src/features/public-api/components/RefundBalanceDialog";
 
 type Transaction = {
   id: string;
@@ -81,6 +82,25 @@ export default function BillingPage() {
           {row.original.type}
         </span>
       ),
+    },
+    {
+      id: "actions",
+      accessorKey: "id", // Required by LangfuseColumnDef
+      header: "Actions",
+      cell: ({ row }) => {
+        if (row.original.type !== "topup") return null;
+
+        return (
+          <RefundBalanceDialog
+            transactionId={row.original.id}
+            maxAmount={row.original.amount}
+          >
+            <Button variant="ghost" size="sm">
+              Refund
+            </Button>
+          </RefundBalanceDialog>
+        );
+      },
     },
   ];
 

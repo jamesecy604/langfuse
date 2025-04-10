@@ -66,6 +66,16 @@ export const ROUTES: Route[] = [
   },
 
   {
+    title: "My billing",
+    pathname: "/account/billing",
+    icon: UsersIcon,
+    show: ({ session }) => {
+      const role = session?.user?.organizations?.[0]?.projects?.[0]?.role;
+      return role === "VIEWER";
+    },
+  },
+
+  {
     title: "Usage & Cost By Project",
     pathname: "/organization/projectTraces",
     icon: Settings,
