@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { stripe } from "../../../lib/stripe";
 import { TRPCError } from "@trpc/server";
+import type { Stripe } from "stripe";
 import { BalanceService } from "../../../../../packages/shared/src/server/services/balanceService";
 export const paymentsRouter = createTRPCRouter({
   getTransactions: protectedProcedure
@@ -44,37 +45,48 @@ export const paymentsRouter = createTRPCRouter({
       const { amount, currency, successUrl, cancelUrl } = input;
       const userId = ctx.session.user.id;
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency,
-              product_data: {
-                name: "Top Up Balance",
+      try {
+        const sessionParams: Stripe.Checkout.SessionCreateParams = {
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency,
+                product_data: { name: "Top Up Balance" },
+                unit_amount: amount,
               },
-              unit_amount: amount * 100, // Convert to cents
+              quantity: 1,
             },
-            quantity: 1,
-          },
-        ],
-        mode: "payment",
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        metadata: {
-          userId,
-          type: "topup",
-        },
-      });
+          ],
+          mode: "payment" as const,
+          success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: cancelUrl,
+          metadata: { userId, type: "topup" },
+        };
 
-      if (!session.url) {
+        const session = await stripe.checkout.sessions.create(sessionParams);
+
+        if (!session.url) {
+          console.error("Stripe session created but URL is missing");
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create Stripe checkout session",
+          });
+        }
+
+        console.log(
+          "Successfully created Stripe checkout session:",
+          session.id,
+        );
+        return { url: session.url };
+      } catch (error) {
+        console.error("Error creating Stripe checkout session:", error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create Stripe checkout session",
+          message: "Failed to create checkout session",
+          cause: error,
         });
       }
-
-      return { url: session.url };
     }),
 
   refund: protectedProcedure

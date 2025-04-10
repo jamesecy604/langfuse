@@ -20,66 +20,6 @@ const amountOptions = [10, 20, 50, 100];
 const MIN_AMOUNT = 5;
 const MAX_AMOUNT = 1000;
 
-const CheckoutForm = ({
-  amount,
-  onSuccess,
-}: {
-  amount: number;
-  onSuccess: () => void;
-}) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const session = useSession();
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (!stripe || !elements) {
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      const { error } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: window.location.origin,
-          receipt_email: session.data?.user?.email ?? undefined,
-        },
-      });
-
-      if (error) {
-        toast.error(error.message || "Payment failed");
-      } else {
-        toast.success(`Payment of $${amount} processed successfully`);
-        onSuccess();
-      }
-    } catch (error) {
-      toast.error("Payment processing failed");
-      console.error(error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="rounded-md border p-4">
-        <PaymentElement />
-      </div>
-      <Button
-        type="submit"
-        className="w-full"
-        disabled={!stripe || isProcessing}
-      >
-        {isProcessing ? "Processing..." : `Pay $${amount}`}
-      </Button>
-    </form>
-  );
-};
-
 export function TopupBalanceForm({
   isOpen,
   onOpenChange,
@@ -91,7 +31,6 @@ export function TopupBalanceForm({
   const [customAmount, setCustomAmount] = useState<string>("");
   const [isLoadingBalance, setIsLoadingBalance] = useState(true);
   const [balance, setBalance] = useState<number | null>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoadingPayment, setIsLoadingPayment] = useState(false);
   const session = useSession();
   const userId = session.data?.user?.id ?? "";
@@ -129,40 +68,29 @@ export function TopupBalanceForm({
     }
   };
 
-  const { mutateAsync: createPaymentIntent } =
-    api.payments.createPaymentIntent.useMutation();
+  const { mutateAsync: createCheckoutSession } =
+    api.payments.createCheckoutSession.useMutation();
 
-  const fetchClientSecret = useCallback(async () => {
+  const handleCheckout = useCallback(async () => {
     try {
-      const { clientSecret } = await createPaymentIntent({
-        amount: amount * 100, // Convert to cents
-      });
-      return clientSecret;
-    } catch (error) {
-      toast.error("Failed to create payment intent");
-      throw error;
-    }
-  }, [amount, createPaymentIntent]);
-
-  useEffect(() => {
-    const fetchSecret = async () => {
       setIsLoadingPayment(true);
-      try {
-        const secret = await fetchClientSecret();
-        setClientSecret(secret);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoadingPayment(false);
+      const amountInCents = Math.round(amount * 100);
+      if (amountInCents < 50) {
+        toast.error("Minimum payment amount is $0.50");
+        return;
       }
-    };
 
-    fetchSecret();
-  }, [fetchClientSecret]);
-
-  const handleSuccess = () => {
-    onOpenChange(false);
-  };
+      const { url } = await createCheckoutSession({
+        amount: amountInCents,
+        successUrl: `${window.location.origin}/account/billing?payment=success`,
+        cancelUrl: `${window.location.origin}/account/billing?payment=canceled`,
+      });
+      window.location.href = url;
+    } catch (error) {
+      toast.error("Failed to create checkout session");
+      setIsLoadingPayment(false);
+    }
+  }, [amount, createCheckoutSession]);
 
   return (
     <div className="space-y-4">
@@ -210,19 +138,13 @@ export function TopupBalanceForm({
         </div>
       </div>
 
-      {clientSecret && (
-        <Elements
-          stripe={stripePromise}
-          options={{
-            clientSecret,
-            appearance: {
-              theme: "stripe",
-            },
-          }}
-        >
-          <CheckoutForm amount={amount} onSuccess={handleSuccess} />
-        </Elements>
-      )}
+      <Button
+        onClick={handleCheckout}
+        className="w-full"
+        disabled={isLoadingPayment}
+      >
+        {isLoadingPayment ? "Processing..." : `Pay $${amount}`}
+      </Button>
     </div>
   );
 }

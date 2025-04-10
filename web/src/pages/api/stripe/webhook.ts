@@ -41,6 +41,7 @@ const webhookHandler = async (req: NextApiRequest, res: NextApiResponse) => {
   switch (event.type) {
     case "checkout.session.completed":
       const session = event.data.object;
+
       if (
         session.payment_status === "paid" &&
         session.metadata?.userId &&
