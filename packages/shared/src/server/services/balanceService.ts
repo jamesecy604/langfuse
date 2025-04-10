@@ -4,12 +4,12 @@ import { getQueue } from "../redis/getQueue";
 import { BalanceRepository } from "./repositories/balanceRepository";
 
 export interface BalanceTransaction {
-  projectId: string;
   transactionId: string;
-  userId: string;
   amount: number;
-  type: "CREDIT" | "DEBIT";
+  type: "topup" | "refund" | "usage";
   description: string;
+  timestamp: Date;
+  userId: string;
 }
 
 interface BalanceDetails {
@@ -24,16 +24,21 @@ export interface IBalanceService {
   updateBalance(
     userId: string,
     amount: number,
-    type: "CREDIT" | "DEBIT",
+    type: "topup" | "refund" | "usage",
     description: string,
   ): Promise<boolean>;
   getCurrentBalance(userId: string): Promise<number | null>;
   getBalanceDetails(userId: string): Promise<BalanceDetails | null>;
+  getTransactions(
+    userId: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<BalanceTransaction[]>;
   batchUpdate(
     transactions: Array<{
       userId: string;
       amount: number;
-      type: "CREDIT" | "DEBIT";
+      type: "topup" | "refund" | "usage";
       description: string;
     }>,
   ): Promise<boolean>;
@@ -77,14 +82,14 @@ export class BalanceService implements IBalanceService {
   private createTransaction(
     userId: string,
     amount: number,
-    type: "CREDIT" | "DEBIT",
+    type: "topup" | "refund" | "usage",
     description: string,
   ) {
     return {
       projectId: this.projectId,
       transactionId: `${userId}-${Date.now()}`,
       userId,
-      amount: type === "DEBIT" ? Math.abs(amount) : amount,
+      amount: type === "topup" ? -Math.abs(amount) : Math.abs(amount),
       type,
       description,
     };
@@ -93,7 +98,7 @@ export class BalanceService implements IBalanceService {
   async updateBalance(
     userId: string,
     amount: number,
-    type: "CREDIT" | "DEBIT",
+    type: "topup" | "refund" | "usage",
     description: string,
   ): Promise<boolean> {
     console.log(
@@ -185,6 +190,24 @@ export class BalanceService implements IBalanceService {
     }
   }
 
+  async getTransactions(
+    userId: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<BalanceTransaction[]> {
+    try {
+      return await this.balanceRepository.getTransactions(userId, from, to);
+    } catch (error) {
+      logger.error("Failed to get transactions", {
+        userId,
+        from,
+        to,
+        error,
+      });
+      throw error;
+    }
+  }
+
   async getBalanceDetails(userId: string) {
     try {
       // Get all details from Redis
@@ -211,17 +234,51 @@ export class BalanceService implements IBalanceService {
    * @param transactions Array of transactions to process
    * @returns Promise<boolean> indicating success
    */
+  async topUp(
+    userId: string,
+    amount: number,
+    source: string,
+    transactionId: string,
+  ): Promise<boolean> {
+    return this.updateBalance(
+      userId,
+      amount,
+      "topup",
+      `Top up from ${source} (${transactionId})`,
+    );
+  }
+
+  async refund(
+    userId: string,
+    transactionId: string,
+    amount: number,
+    reason: string,
+  ): Promise<boolean> {
+    return this.updateBalance(
+      userId,
+      amount,
+      "refund",
+      `Refund for ${transactionId}: ${reason}`,
+    );
+  }
+
   async batchUpdate(
     transactions: Array<{
       userId: string;
       amount: number;
-      type: "CREDIT" | "DEBIT";
+      type: "topup" | "refund" | "usage";
       description: string;
     }>,
   ): Promise<boolean> {
     try {
       // Update Redis in batch
-      await this.balanceRepository.batchUpdateRedisBalances(transactions);
+      await this.balanceRepository.batchUpdateRedisBalances(
+        transactions.map(({ userId, amount, type }) => ({
+          userId,
+          amount,
+          type,
+        })),
+      );
 
       // Queue async updates to ClickHouse
       const queue = await getQueue(QueueName.BalanceTransactionQueue);

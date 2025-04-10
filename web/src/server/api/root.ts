@@ -35,6 +35,7 @@ import { balanceRouter } from "@/src/server/api/routers/balance";
 import { llmApiKeyUsageRouter } from "@/src/features/llm-api-key/server/usageRouter";
 import { cachedModelsRouter } from "@/src/server/api/routers/cachedModels";
 import { usageCostByLLMApiKeyRouter } from "@/src/server/api/routers/usageCostByLLMApiKey";
+import { paymentsRouter } from "@/src/server/api/routers/payments";
 
 /**
  * This is the primary router for your server.
@@ -75,6 +76,7 @@ export const appRouter = createTRPCRouter({
   cachedModels: cachedModelsRouter,
   system: systemRouter,
   usageByLLMApiKeyRouter: usageCostByLLMApiKeyRouter,
+  payments: paymentsRouter,
 });
 
 // export type definition of API

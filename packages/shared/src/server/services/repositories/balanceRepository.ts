@@ -93,7 +93,7 @@ export class BalanceRepository {
   async updateRedisBalance(
     userId: string,
     amount: number,
-    type: "CREDIT" | "DEBIT",
+    type: "topup" | "refund" | "usage",
   ) {
     const key = `${BALANCE_KEY_PREFIX}${userId}`;
     const redis = this.getRedis();
@@ -121,15 +121,17 @@ export class BalanceRepository {
 
         // Calculate new values
         const newBalance =
-          type === "CREDIT"
+          type === "refund" || type === "usage"
             ? initialBalance + Math.abs(amount)
             : initialBalance - Math.abs(amount);
 
         const newTopups =
-          type === "CREDIT" ? initialTopups + Math.abs(amount) : initialTopups;
+          type === "topup" ? initialTopups + Math.abs(amount) : initialTopups;
 
         const newUsage =
-          type === "DEBIT" ? initialUsage + Math.abs(amount) : initialUsage;
+          type === "refund" || type === "usage"
+            ? initialUsage + Math.abs(amount)
+            : initialUsage;
 
         // Start transaction
         const multi = redis.multi();
@@ -181,6 +183,61 @@ export class BalanceRepository {
       { userId, amount, type },
     );
     return null;
+  }
+
+  async getTransactions(userId: string, from?: Date, to?: Date) {
+    const clickhouse = await this.getClickhouse();
+    try {
+      let query = `
+        SELECT 
+          t.id as transactionId,
+          t.amount,
+          t.type,
+          t.description,
+          t.timestamp,
+          t.userId
+        FROM totalUsage t
+        WHERE t.userId = {userId:String}
+      `;
+
+      const params: Record<string, any> = { userId };
+
+      if (from) {
+        query += ` AND t.timestamp >= {from:DateTime}`;
+        params.from = from;
+      }
+
+      if (to) {
+        query += ` AND t.timestamp <= {to:DateTime}`;
+        params.to = to;
+      }
+
+      query += ` ORDER BY t.timestamp DESC LIMIT 100`;
+
+      const result = await clickhouse.query({
+        query,
+        query_params: params,
+        format: "JSON",
+      });
+
+      const response = await result.json();
+      return response.data.map((row: any) => ({
+        transactionId: row.transactionId,
+        amount: parseFloat(row.amount),
+        type: row.type,
+        description: row.description,
+        timestamp: new Date(row.timestamp),
+        userId: row.userId,
+      }));
+    } catch (error) {
+      logger.error("Failed to get transactions", {
+        userId,
+        from,
+        to,
+        error,
+      });
+      throw error;
+    }
   }
 
   async getRedisBalance(userId: string): Promise<number | null> {
@@ -244,7 +301,7 @@ export class BalanceRepository {
     transactions: Array<{
       userId: string;
       amount: number;
-      type: "CREDIT" | "DEBIT";
+      type: "topup" | "refund" | "usage";
     }>,
   ) {
     const redis = this.getRedis();
@@ -269,13 +326,13 @@ export class BalanceRepository {
           multi.exists(key);
 
           // Convert amount for DEBIT transactions (negative amount should subtract)
-          const adjustedAmount = type === "DEBIT" ? Math.abs(amount) : amount;
+          const adjustedAmount = type === "topup" ? Math.abs(amount) : amount;
 
           // Update current balance
           multi.hincrbyfloat(key, BALANCE_DETAILS.CURRENT, adjustedAmount);
 
           // Update totals based on transaction type
-          if (type === "CREDIT") {
+          if (type === "refund" || type === "usage") {
             multi.hincrbyfloat(key, BALANCE_DETAILS.TOTAL_TOPUPS, amount);
           } else {
             multi.hincrbyfloat(
