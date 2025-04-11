@@ -56,14 +56,17 @@ export function TopupBalanceForm({
       if (value) {
         const numValue = parseInt(value, 10);
         if (!isNaN(numValue)) {
-          if (numValue >= MIN_AMOUNT && numValue <= MAX_AMOUNT) {
-            setAmount(numValue);
-          } else {
-            toast.error(
-              `Amount must be between $${MIN_AMOUNT} and $${MAX_AMOUNT}`,
-            );
-          }
+          setAmount(numValue);
         }
+      }
+    }
+  };
+
+  const handleCustomAmountBlur = () => {
+    if (customAmount) {
+      const numValue = parseInt(customAmount, 10);
+      if (numValue < MIN_AMOUNT || numValue > MAX_AMOUNT) {
+        toast.error(`Amount must be between $${MIN_AMOUNT} and $${MAX_AMOUNT}`);
       }
     }
   };
@@ -127,6 +130,7 @@ export function TopupBalanceForm({
             pattern="[0-9]*"
             value={customAmount}
             onChange={handleCustomAmountChange}
+            onBlur={handleCustomAmountBlur}
             className="w-20 rounded-md border p-2 text-sm"
             placeholder="Custom $"
           />
@@ -141,7 +145,9 @@ export function TopupBalanceForm({
       <Button
         onClick={handleCheckout}
         className="w-full"
-        disabled={isLoadingPayment}
+        disabled={
+          isLoadingPayment || amount < MIN_AMOUNT || amount > MAX_AMOUNT
+        }
       >
         {isLoadingPayment ? "Processing..." : `Pay $${amount}`}
       </Button>
