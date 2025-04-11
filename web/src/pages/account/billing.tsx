@@ -16,6 +16,7 @@ type Transaction = {
   type: "topup" | "refund" | "usage";
   timestamp: Date;
   description: string;
+  paymentIntentId?: string;
 };
 
 export default function BillingPage() {

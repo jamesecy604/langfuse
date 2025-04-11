@@ -3,6 +3,13 @@ import { QueueName, QueueJobs } from "../queues";
 import { getQueue } from "../redis/getQueue";
 import { BalanceRepository } from "./repositories/balanceRepository";
 
+export interface BalanceDetails {
+  current: number;
+  totalTopups: number;
+  totalUsage: number;
+  updatedAt: Date | null;
+}
+
 export interface BalanceTransaction {
   transactionId: string;
   amount: number;
@@ -10,13 +17,16 @@ export interface BalanceTransaction {
   description: string;
   timestamp: Date;
   userId: string;
-}
-
-interface BalanceDetails {
-  current: number;
-  totalTopups: number;
-  totalUsage: number;
-  updatedAt: Date | null;
+  paymentIntentId?: string;
+  payload?: {
+    projectId: string;
+    transactionId: string;
+    userId: string;
+    amount: number;
+    type: "topup" | "refund" | "usage";
+    description: string;
+    paymentIntentId?: string;
+  };
 }
 
 export interface IBalanceService {
@@ -144,24 +154,6 @@ export class BalanceService implements IBalanceService {
         return false;
       }
 
-      // Only queue ClickHouse update after successful Redis update
-      console.log(
-        `[BalanceService] Getting queue ${QueueName.BalanceTransactionQueue}...`,
-      );
-      const queue = await getQueue(QueueName.BalanceTransactionQueue);
-      if (queue) {
-        const jobData = {
-          ...transaction,
-          timestamp: new Date(),
-          id: `${userId}-${Date.now()}`,
-        };
-        await queue.add(QueueJobs.BalanceTransactionJob, jobData);
-      } else {
-        console.error(
-          `[BalanceService] Queue ${QueueName.BalanceTransactionQueue} not found`,
-        );
-      }
-
       return true;
     } catch (error) {
       logger.error("Failed to update balance", {
@@ -243,12 +235,35 @@ export class BalanceService implements IBalanceService {
     source: string,
     transactionId: string,
   ): Promise<boolean> {
-    return this.updateBalance(
+    const result = await this.updateBalance(
       userId,
       amount,
       "topup",
       `Top up from ${source} (${transactionId})`,
     );
+
+    // Ensure paymentIntentId gets passed to worker
+    if (result) {
+      const queue = await getQueue(QueueName.BalanceTransactionQueue);
+      if (queue) {
+        await queue.add(QueueJobs.BalanceTransactionJob, {
+          timestamp: new Date(),
+          id: `${userId}-${Date.now()}`,
+          payload: {
+            ...this.createTransaction(
+              userId,
+              amount,
+              "topup",
+              `Top up from ${source} (${transactionId})`,
+            ),
+            projectId: this.projectId,
+            paymentIntentId: transactionId,
+          },
+          name: QueueJobs.BalanceTransactionJob,
+        });
+      }
+    }
+    return result;
   }
 
   async refund(
@@ -257,12 +272,36 @@ export class BalanceService implements IBalanceService {
     amount: number,
     reason: string,
   ): Promise<boolean> {
-    return this.updateBalance(
+    const result = await this.updateBalance(
       userId,
       amount,
       "refund",
       `Refund for ${transactionId}: ${reason}`,
     );
+
+    // Ensure paymentIntentId gets passed to worker
+    if (result) {
+      const queue = await getQueue(QueueName.BalanceTransactionQueue);
+
+      if (queue) {
+        await queue.add(QueueJobs.BalanceTransactionJob, {
+          timestamp: new Date(),
+          id: `${userId}-${Date.now()}`,
+          payload: {
+            ...this.createTransaction(
+              userId,
+              amount,
+              "refund",
+              `Refund for ${transactionId}: ${reason}`,
+            ),
+            projectId: this.projectId,
+            paymentIntentId: transactionId,
+          },
+          name: QueueJobs.BalanceTransactionJob,
+        });
+      }
+    }
+    return result;
   }
 
   async batchUpdate(

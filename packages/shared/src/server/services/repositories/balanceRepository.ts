@@ -195,7 +195,8 @@ export class BalanceRepository {
           t.type,
           t.description,
           t.timestamp,
-          t.userId
+          t.userId,
+          t.paymentIntentId
         FROM totalUsage t
         WHERE t.userId = {userId:String}
       `;
@@ -238,6 +239,7 @@ export class BalanceRepository {
         description: row.description,
         timestamp: new Date(row.timestamp),
         userId: row.userId,
+        paymentIntentId: row.paymentIntentId || undefined,
       }));
     } catch (error) {
       logger.error("Failed to get transactions", {

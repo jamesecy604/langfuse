@@ -15,11 +15,12 @@ export class BalanceWorkerService {
   }
 
   async processQueue(job: Job<BalanceTransaction>) {
-    const { userId, amount, type } = job.data;
+    // Handle both direct data and payload formats
+    const data = job.data.payload || job.data;
 
-    if (!userId || amount === undefined || !type) {
+    if (!data) {
       const error = new Error(
-        `Invalid balance transaction data: ${JSON.stringify(job.data)}`,
+        `-------Invalid balance transaction data: ${JSON.stringify(job.data)}`,
       );
       logger.error("Invalid balance transaction job", {
         error,
@@ -29,28 +30,57 @@ export class BalanceWorkerService {
       throw error;
     }
 
+    const { userId, amount, type } = data;
+    if (!userId || amount === undefined || !type) {
+      const error = new Error(
+        `-----------Invalid balance transaction data: missing required fields: ${JSON.stringify(data)}`,
+      );
+      logger.error("---------Invalid balance transaction job", {
+        error,
+        jobId: job.id,
+        jobData: job.data,
+      });
+      throw error;
+    }
+
     console.log(
-      `[BalanceWorker] Processing job ${job.id} for user ${userId}, amount ${amount}, type ${type}`,
+      `-----------[BalanceWorker] Processing job ${job.id} for user ${userId}, amount ${amount}, type ${type}`,
     );
 
     try {
       // Map transaction type to CREDIT/DEBIT for ClickHouse
 
-      const clickHouseAmount =
-        type === "topup" ? Math.abs(amount) : -Math.abs(amount);
+      // For refunds, we already pass negative amount from the service
+      const clickHouseAmount = type === "topup" ? Math.abs(amount) : amount;
 
-      console.log(`[BalanceWorker] Updating ClickHouse balance...`);
-      await this.updateClickHouseBalance(userId, clickHouseAmount, type);
-      console.log(`[BalanceWorker] ClickHouse update completed`);
-
-      logger.info(`Processed ClickHouse balance transaction`, {
+      console.log(
+        `---------------[BalanceWorker] Updating ClickHouse balance...`,
+      );
+      await this.updateClickHouseBalance(
         userId,
-        amount,
+        clickHouseAmount,
         type,
-      });
+        job,
+        data.paymentIntentId,
+      );
+      console.log(
+        `------------------[BalanceWorker] ClickHouse update completed`,
+      );
+
+      logger.info(
+        `---------------------Processed ClickHouse balance transaction`,
+        {
+          userId,
+          amount,
+          type,
+        },
+      );
     } catch (error) {
-      console.error(`[BalanceWorker] Failed to process transaction:`, error);
-      logger.error("Failed to process balance transaction", {
+      console.error(
+        `--------------------------[BalanceWorker] Failed to process transaction:`,
+        error,
+      );
+      logger.error("---------------Failed to process balance transaction", {
         error,
         userId,
         amount,
@@ -64,6 +94,8 @@ export class BalanceWorkerService {
     userId: string,
     amount: number,
     type: "topup" | "refund" | "usage",
+    job: Job<BalanceTransaction>,
+    paymentIntentId?: string,
   ) {
     const clickhouse = clickhouseClient();
     if (!clickhouse) {
@@ -74,20 +106,45 @@ export class BalanceWorkerService {
     const timestamp = new Date(now.toISOString().split(".")[0] + "Z");
 
     // Insert to appropriate transaction table
-    await clickhouse.insert({
-      table: "totalUsage",
-      values: [
-        {
-          id: crypto.randomUUID(),
-          userId,
-          amount,
-          timestamp: timestamp,
-          description: "System transaction",
-          type: type,
-        },
-      ],
-      format: "JSONEachRow",
-    });
+    const transactionData = {
+      id: crypto.randomUUID(),
+      userId,
+      amount,
+      timestamp: timestamp,
+      description: "System transaction",
+      type: type,
+      paymentIntentId: paymentIntentId || null,
+    };
+
+    console.log(
+      "--------------[BalanceWorker] Inserting into totalUsage:",
+      transactionData,
+    );
+
+    try {
+      const insertResult = await clickhouse.insert({
+        table: "totalUsage",
+        values: [transactionData],
+        format: "JSONEachRow",
+      });
+
+      if (!insertResult.query_id) {
+        throw new Error(
+          "------------------ClickHouse insert failed - no query_id returned",
+        );
+      }
+
+      console.log(
+        "---------------[BalanceWorker] Successfully inserted into totalUsage, query_id:",
+        insertResult.query_id,
+      );
+    } catch (error) {
+      console.error(
+        "-------------------[BalanceWorker] Failed to insert into totalUsage:",
+        error,
+      );
+      throw error;
+    }
 
     // Check if user has existing balance
     const currentBalance = await clickhouse.query({
